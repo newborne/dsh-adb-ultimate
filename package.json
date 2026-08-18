@@ -2,19 +2,19 @@
   "name": "dsh-adb-ultimate",
   "version": "1.0.0",
   "description": "ADB Ultimate - 全功能ADB设备管理插件 for DeepSeek Harness",
-  "keywords": [
-    "dsh-plugin",
-    "dsh",
-    "adb",
-    "android",
-    "mobile",
-    "device-management",
-    "automation"
-  ],
-  "homepage": "https://github.com/yourname/dsh-adb-ultimate",
-  "bugs": {
-    "url": "https://github.com/yourname/dsh-adb-ultimate/issues"
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
   },
+  "files": [
+    "lib/",
+    "cordis.patch.yml",
+    "README.md"
+  ],
   "license": "MIT",
   "author": {
     "name": "Your Name",
@@ -24,40 +24,39 @@
     "type": "git",
     "url": "https://github.com/yourname/dsh-adb-ultimate.git"
   },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "adb",
+    "android",
+    "mobile",
+    "device-management"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
     }
   },
-  "files": [
-    "lib/",
-    "web/",
-    "cordis.patch.yml"
-  ],
   "scripts": {
-    "build": "tsc",
-    "dev": "node lib/server.js",
-    "start": "npm run build && npm run dev",
-    "prepublishOnly": "npm run build",
-    "test": "node --test test/*.test.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test \"test/*.test.mjs\"",
     "pack": "npm pack --dry-run"
   },
+  "dependencies": {
+    "schemastery": "^3.13.1"
+  },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/node": "^20.10.0",
     "typescript": "^5.3.0"
   },
   "peerDependencies": {
-    "cordis": ">=3.0.0"
+    "@deepseek-ai/cordis": ">=3.0.0"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "zx": "^7.2.3"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
