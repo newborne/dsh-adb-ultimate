@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADB Ultimate - 设备管理面板</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-icon">📱</span>
+        <span class="logo-text">ADB Ultimate</span>
+      </div>
+      
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="devices">
+          <span class="nav-icon">📋</span>
+          <span class="nav-text">设备列表</span>
+        </button>
+        <button class="nav-item" data-tab="screen">
+          <span class="nav-icon">🖥️</span>
+          <span class="nav-text">屏幕预览</span>
+        </button>
+        <button class="nav-item" data-tab="performance">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">性能监控</span>
+        </button>
+        <button class="nav-item" data-tab="apps">
+          <span class="nav-icon">📦</span>
+          <span class="nav-text">应用管理</span>
+        </button>
+        <button class="nav-item" data-tab="files">
+          <span class="nav-icon">📁</span>
+          <span class="nav-text">文件管理</span>
+        </button>
+        <button class="nav-item" data-tab="logcat">
+          <span class="nav-icon">📝</span>
+          <span class="nav-text">日志监控</span>
+        </button>
+        <button class="nav-item" data-tab="terminal">
+          <span class="nav-icon">⌨️</span>
+          <span class="nav-text">终端</span>
+        </button>
+      </nav>
+      
+      <div class="sidebar-footer">
+        <div class="connection-status">
+          <span class="status-dot offline"></span>
+          <span class="status-text">未连接</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 设备列表面板 -->
+      <section id="panel-devices" class="panel active">
+        <div class="panel-header">
+          <h2>📋 设备列表</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="btn-refresh-devices">🔄 刷新</button>
+            <button class="btn btn-success" id="btn-connect-device">➕ 连接设备</button>
+          </div>
+        </div>
+        
+        <div class="device-grid" id="device-grid">
+          <!-- 设备卡片将动态生成 -->
+        </div>
+        
+        <div class="device-detail" id="device-detail" style="display: none;">
+          <div class="detail-header">
+            <h3>设备详情</h3>
+            <button class="btn btn-secondary" id="btn-close-detail">关闭</button>
+          </div>
+          <div class="detail-content" id="detail-content">
+            <!-- 详情内容将动态生成 -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 屏幕预览面板 -->
+      <section id="panel-screen" class="panel">
+        <div class="panel-header">
+          <h2>🖥️ 屏幕预览</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="btn-screenshot">📷 截图</button>
+            <button class="btn btn-danger" id="btn-screen-off">🔒 锁屏</button>
+          </div>
+        </div>
+        
+        <div class="screen-container">
+          <div class="screen-viewport" id="screen-viewport">
+            <div class="screen-placeholder">
+              <p>选择设备后显示屏幕预览</p>
+              <p class="hint">支持触摸交互：点击、滑动</p>
+            </div>
+          </div>
+          <div class="screen-info" id="screen-info">
+            <span>分辨率: --</span>
+            <span>密度: --</span>
+          </div>
+        </div>
+        
+        <div class="touch-controls">
+          <h4>触摸操作</h4>
+          <div class="control-row">
+            <button class="btn btn-secondary" id="btn-tap">点击</button>
+            <button class="btn btn-secondary" id="btn-swipe-up">↑ 上滑</button>
+            <button class="btn btn-secondary" id="btn-swipe-down">↓ 下滑</button>
+          </div>
+          <div class="control-row">
+            <button class="btn btn-secondary" id="btn-home">🏠 Home</button>
+            <button class="btn btn-secondary" id="btn-back">⬅️ 返回</button>
+            <button class="btn btn-secondary" id="btn-recent">📱 最近</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 性能监控面板 -->
+      <section id="panel-performance" class="panel">
+        <div class="panel-header">
+          <h2>📊 性能监控</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="btn-refresh-perf">🔄 刷新</button>
+            <label class="checkbox-label">
+              <input type="checkbox" id="chk-auto-refresh" checked>
+              自动刷新 (2s)
+            </label>
+          </div>
+        </div>
+        
+        <div class="perf-grid">
+          <div class="perf-card">
+            <h4>CPU 使用率</h4>
+            <div class="perf-chart" id="chart-cpu">
+              <div class="chart-placeholder">-- %</div>
+            </div>
+            <div class="perf-value" id="val-cpu">-- %</div>
+          </div>
+          
+          <div class="perf-card">
+            <h4>内存使用</h4>
+            <div class="perf-chart" id="chart-mem">
+              <div class="chart-placeholder">-- GB</div>
+            </div>
+            <div class="perf-value" id="val-mem">-- / -- GB</div>
+          </div>
+          
+          <div class="perf-card">
+            <h4>电池状态</h4>
+            <div class="battery-widget" id="battery-widget">
+              <div class="battery-icon">
+                <div class="battery-level" id="battery-level"></div>
+              </div>
+              <div class="battery-info">
+                <span id="val-battery-level">-- %</span>
+                <span id="val-battery-temp">-- °C</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="perf-card">
+            <h4>帧率 (FPS)</h4>
+            <div class="perf-chart" id="chart-fps">
+              <div class="chart-placeholder">-- fps</div>
+            </div>
+            <div class="perf-value" id="val-fps">-- fps</div>
+          </div>
+          
+          <div class="perf-card">
+            <h4>存储空间</h4>
+            <div class="storage-bar" id="storage-bar">
+              <div class="storage-used" id="storage-used"></div>
+            </div>
+            <div class="perf-value" id="val-storage">-- / -- GB</div>
+          </div>
+          
+          <div class="perf-card">
+            <h4>网络状态</h4>
+            <div class="perf-chart" id="chart-network">
+              <div class="chart-placeholder">-- MB/s</div>
+            </div>
+            <div class="perf-value" id="val-network">IP: --</div>
+          </div>
+        </div>
+        
+        <div class="perf-history">
+          <h4>历史趋势</h4>
+          <canvas id="perf-chart-canvas" width="800" height="200"></canvas>
+        </div>
+      </section>
+
+      <!-- 应用管理面板 -->
+      <section id="panel-apps" class="panel">
+        <div class="panel-header">
+          <h2>📦 应用管理</h2>
+          <div class="header-actions">
+            <input type="text" class="search-input" id="app-search" placeholder="搜索应用...">
+            <button class="btn btn-primary" id="btn-install-apk">📥 安装 APK</button>
+          </div>
+        </div>
+        
+        <div class="app-filter">
+          <button class="filter-btn active" data-filter="all">全部</button>
+          <button class="filter-btn" data-filter="system">系统应用</button>
+          <button class="filter-btn" data-filter="user">用户应用</button>
+        </div>
+        
+        <div class="app-list" id="app-list">
+          <div class="loading">加载中...</div>
+        </div>
+        
+        <div class="app-detail-modal" id="app-detail-modal" style="display: none;">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="modal-app-name">应用详情</h3>
+              <button class="btn-close" id="btn-close-app-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-app-body">
+              <!-- 应用详情 -->
+            </div>
+            <div class="modal-footer">
+              <button class="btn btn-primary" id="btn-launch-app">启动</button>
+              <button class="btn btn-warning" id="btn-stop-app">停止</button>
+              <button class="btn btn-danger" id="btn-uninstall-app">卸载</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 文件管理面板 -->
+      <section id="panel-files" class="panel">
+        <div class="panel-header">
+          <h2>📁 文件管理</h2>
+          <div class="header-actions">
+            <input type="text" class="path-input" id="file-path" value="/sdcard" readonly>
+            <button class="btn btn-primary" id="btn-refresh-files">🔄 刷新</button>
+            <button class="btn btn-success" id="btn-upload-file">⬆️ 上传</button>
+            <button class="btn btn-secondary" id="btn-new-folder">📁 新建</button>
+          </div>
+        </div>
+        
+        <div class="file-toolbar">
+          <button class="btn btn-secondary" id="btn-pull-file">⬇️ 拉取</button>
+          <button class="btn btn-secondary" id="btn-push-file">⬆️ 推送</button>
+        </div>
+        
+        <div class="file-list" id="file-list">
+          <table class="file-table">
+            <thead>
+              <tr>
+                <th>类型</th>
+                <th>名称</th>
+                <th>大小</th>
+                <th>修改时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="file-tbody">
+              <tr><td colspan="5" class="loading">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 日志监控面板 -->
+      <section id="panel-logcat" class="panel">
+        <div class="panel-header">
+          <h2>📝 Logcat 日志</h2>
+          <div class="header-actions">
+            <button class="btn btn-primary" id="btn-clear-log">🗑️ 清空</button>
+            <button class="btn btn-success" id="btn-start-logcat">▶️ 开始</button>
+            <button class="btn btn-danger" id="btn-stop-logcat">⏹️ 停止</button>
+            <button class="btn btn-secondary" id="btn-save-log">💾 保存</button>
+          </div>
+        </div>
+        
+        <div class="logcat-filters">
+          <select id="log-level-filter">
+            <option value="V">Verbose</option>
+            <option value="D">Debug</option>
+            <option value="I" selected>Info</option>
+            <option value="W">Warn</option>
+            <option value="E">Error</option>
+          </select>
+          <input type="text" class="filter-input" id="log-tag-filter" placeholder="Tag 过滤">
+          <input type="text" class="filter-input" id="log-text-filter" placeholder="内容搜索">
+        </div>
+        
+        <div class="logcat-view" id="logcat-view">
+          <div class="log-entry" style="display: none;"></div>
+        </div>
+      </section>
+
+      <!-- 终端面板 -->
+      <section id="panel-terminal" class="panel">
+        <div class="panel-header">
+          <h2>⌨️ Shell 终端</h2>
+          <div class="header-actions">
+            <button class="btn btn-secondary" id="btn-clear-terminal">清空</button>
+          </div>
+        </div>
+        
+        <div class="terminal-output" id="terminal-output">
+          <div class="terminal-line system">Android Debug Bridge Shell</div>
+          <div class="terminal-line system">Type 'help' for available commands</div>
+        </div>
+        
+        <div class="terminal-input-row">
+          <span class="prompt">root@device:/ $ </span>
+          <input type="text" class="terminal-input" id="terminal-input" placeholder="输入命令...">
+          <button class="btn btn-primary" id="btn-execute">执行</button>
+        </div>
+        
+        <div class="terminal-history" id="terminal-history">
+          <h4>命令历史</h4>
+          <div class="history-list" id="history-list">
+            <!-- 历史命令 -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 连接设备对话框 -->
+  <div class="modal" id="connect-modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>连接无线设备</h3>
+        <button class="btn-close" id="btn-close-connect-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>IP 地址</label>
+          <input type="text" id="connect-ip" placeholder="192.168.1.100">
+        </div>
+        <div class="form-group">
+          <label>端口</label>
+          <input type="text" id="connect-port" value="5555">
+        </div>
+        <div class="form-group">
+          <label>配对码 (如需要)</label>
+          <input type="text" id="connect-pair-code" placeholder="123456">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-connect">取消</button>
+        <button class="btn btn-primary" id="btn-do-connect">连接</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
