@@ -7,11 +7,12 @@
   "types": "lib/index.d.ts",
   "exports": {
     ".": "./lib/index.js",
-    "./client": "./lib/client.js",
+    "./client": "./client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/",
+    "client.js",
     "cordis.patch.yml",
     "README.md"
   ],

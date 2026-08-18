@@ -6,16 +6,13 @@
 
 ```bash
 dsh plugin --profile web add github:yourname/dsh-adb-ultimate
-```
-
-或从 npm 安装：
-
-```bash
-dsh plugin --profile web add dsh-adb-ultimate
+# 或本地安装
+dsh plugin --profile web add /path/to/dsh-adb-ultimate
 ```
 
 ## 功能
 
+### Agent 工具 (32个)
 | 分类 | 工具 | 说明 |
 |------|------|------|
 | **设备管理** | `adb_list_devices` | 列出已连接设备 |
@@ -24,7 +21,6 @@ dsh plugin --profile web add dsh-adb-ultimate
 | | `adb_pair` | 配对设备 |
 | | `adb_device_info` | 获取设备信息 |
 | **屏幕操作** | `adb_screenshot` | 截图 |
-| | `adb_screen_record` | 录屏 |
 | | `adb_screen_on` | 亮屏 |
 | | `adb_screen_off` | 灭屏 |
 | **输入模拟** | `adb_input_tap` | 点击 |
@@ -51,15 +47,25 @@ dsh plugin --profile web add dsh-adb-ultimate
 | | `adb_getprop` | 系统属性 |
 | **系统控制** | `adb_reboot` | 重启设备 |
 
-## 配置
+### Web UI 面板
+- 📋 **信息**: 显示设备型号、Android 版本、电池状态等
+- 📊 **性能**: 内存、CPU、帧率实时监控
+- 📦 **应用**: 浏览和搜索已安装应用
+- 📝 **日志**: 实时 logcat 查看
 
-```yaml
-# cordis.patch.yml
-- id: dsh-adb-ultimate
-  config:
-    adbPath: auto              # 自动探测 ADB
-    defaultSerial: ~            # 默认设备
-    timeoutMs: 30000            # 超时
+## 项目结构
+
+```
+dsh-adb-ultimate/
+├── src/
+│   ├── index.ts          # 插件入口 + RPC 处理器
+│   └── tools/
+│       └── index.ts      # 32个工具函数
+├── client.js             # Web UI 面板 (注入到会话视图)
+├── lib/                  # 编译输出
+├── cordis.patch.yml      # 插件配置
+├── package.json
+└── README.md
 ```
 
 ## 开发
