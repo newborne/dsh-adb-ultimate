@@ -1,0 +1,130 @@
+# dsh-adb-ultimate 插件配置
+# 用于 DeepSeek Harness (DSH) 插件注册
+
+- id: dsh-adb-ultimate
+  name: ADB Ultimate
+  version: 1.0.0
+  description: 全功能ADB设备管理解决方案 - 支持设备连接、屏幕预览、性能监控、应用管理、日志调试
+  author: Your Name <your.email@example.com>
+  homepage: https://github.com/yourname/dsh-adb-ultimate
+
+  # 插件配置项
+  config:
+    # ADB 可执行文件路径，auto 表示自动探测
+    adbPath: auto
+
+    # 默认设备序列号
+    defaultSerial: ~
+
+    # 命令执行超时时间 (毫秒)
+    timeoutMs: 30000
+
+    # 屏幕截图保存目录
+    screenshotDir: ~/.dsh/storages/dsh-adb-ultimate/screenshots
+
+    # 屏幕录像保存目录
+    recordDir: ~/.dsh/storages/dsh-adb-ultimate/recordings
+
+    # 性能基线数据目录
+    baselinesDir: ~/.dsh/storages/dsh-adb-ultimate/baselines
+
+    # 性能监控采样间隔 (毫秒)
+    monitorInterval: 1000
+
+    # 告警阈值
+    alertThresholds:
+      cpu: 80          # CPU 使用率 > 80% 告警
+      memory: 90        # 内存使用 > 90% 告警
+      batteryTemp: 45   # 电池温度 > 45°C 告警
+      fps: 30           # FPS < 30 告警
+
+  # 提供的功能
+  provides:
+    # Agent 可调用的工具
+    tools:
+      # 设备管理
+      - adb_list_devices
+      - adb_connect
+      - adb_disconnect
+      - adb_pair
+      - adb_discover
+      - adb_device_info
+
+      # 屏幕操作
+      - adb_screenshot
+      - adb_screen_record
+      - adb_screen_on
+      - adb_screen_off
+
+      # 输入模拟
+      - adb_input_tap
+      - adb_input_swipe
+      - adb_input_text
+      - adb_input_keyevent
+
+      # 应用管理
+      - adb_install
+      - adb_uninstall
+      - adb_launch
+      - adb_force_stop
+      - adb_list_packages
+
+      # 文件管理
+      - adb_pull
+      - adb_push
+      - adb_ls
+      - adb_shell
+
+      # 性能监控
+      - adb_meminfo
+      - adb_cpuinfo
+      - adb_fps
+      - adb_battery
+      - adb_perf_snapshot
+
+      # 日志调试
+      - adb_logcat
+      - adb_bugreport
+      - adb_dumpsys
+      - adb_getprop
+
+      # 系统控制
+      - adb_reboot
+
+    # RPC 远程调用
+    rpc:
+      - device_list
+      - device_info
+      - perf_monitor
+      - screen_capture
+
+    # Web UI 入口
+    web:
+      entry: ./web/dist/index.html
+      title: ADB Ultimate
+      icon: 📱
+
+  # 依赖
+  requires:
+    - dsh-core
+
+  # 生命周期钩子
+  hooks:
+    onLoad: |
+      // 初始化 ADB 路径
+      const config = await this.getConfig();
+      if (config.adbPath === 'auto') {
+        config.adbPath = await findAdbPath();
+      }
+    onDeviceConnected: |
+      // 设备连接时的回调
+      console.log('Device connected:', device);
+    onDeviceDisconnected: |
+      // 设备断开时的回调
+      console.log('Device disconnected:', device);
+
+  # 权限要求
+  permissions:
+    - shell
+    - file_read
+    - file_write
