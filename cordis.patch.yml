@@ -3,5 +3,6 @@
 #   1. 30+ ADB 工具函数供 Agent 调用
 #   2. Web UI 设备面板
 
-- id: dsh-adb-ultimate
-  name: dsh-adb-ultimate
+- insert:
+    - id: dsh-adb-ultimate
+      name: dsh-adb-ultimate

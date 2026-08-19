@@ -147,8 +147,40 @@ window.__ModuleLoader__.load({
       const [logFilter, setLogFilter] = React.useState({ level: 'I', lines: 50 })
       const [connectIP, setConnectIP] = React.useState('')
       const [connectPort, setConnectPort] = React.useState('5555')
+      const [pairingCode, setPairingCode] = React.useState('')
+      const [isPairMode, setIsPairMode] = React.useState(false)
       const [error, setError] = React.useState(null)
       const [busy, setBusy] = React.useState(false)
+      const [history, setHistory] = React.useState(() => {
+        try { return JSON.parse(localStorage.getItem('dsh-adb-ultimate-history') || '[]') } 
+        catch { return [] }
+      })
+
+      // 保存历史到 localStorage
+      const saveHistory = (newHistory) => {
+        setHistory(newHistory)
+        localStorage.setItem('dsh-adb-ultimate-history', JSON.stringify(newHistory.slice(0, 10)))
+      }
+
+      // 添加到历史记录
+      const addToHistory = (ip, port) => {
+        const key = `${ip}:${port}`
+        const newHistory = history.filter(h => h.key !== key)
+        newHistory.unshift({ key, ip, port, time: Date.now() })
+        saveHistory(newHistory)
+      }
+
+      // 点击历史记录
+      const handleHistoryClick = (item) => {
+        setConnectIP(item.ip)
+        setConnectPort(item.port)
+      }
+
+      // 删除历史记录
+      const deleteHistory = (e, key) => {
+        e.stopPropagation()
+        saveHistory(history.filter(h => h.key !== key))
+      }
 
       // 加载设备列表
       const loadDevices = React.useCallback(() => {
@@ -202,10 +234,35 @@ window.__ModuleLoader__.load({
       const handleConnect = () => {
         if (!connectIP) return
         setBusy(true)
-        runtime.connect(connectIP, parseInt(connectPort) || 5555)
-          .then(() => { loadDevices(); setConnectIP('') })
-          .catch(e => setError(String(e.message || e)))
-          .finally(() => setBusy(false))
+        if (isPairMode) {
+          // 配对模式 - 需要配对码
+          if (!pairingCode) {
+            setError('请输入配对码')
+            setBusy(false)
+            return
+          }
+          runtime.pair(connectIP, parseInt(connectPort) || 5555, pairingCode)
+            .then((data) => {
+              alert('配对成功: ' + (data.output || ''))
+              addToHistory(connectIP, connectPort)
+              loadDevices()
+              setConnectIP('')
+              setPairingCode('')
+              setIsPairMode(false)
+            })
+            .catch(e => setError(String(e.message || e)))
+            .finally(() => setBusy(false))
+        } else {
+          // 普通连接模式
+          runtime.connect(connectIP, parseInt(connectPort) || 5555)
+            .then(() => { 
+              addToHistory(connectIP, connectPort)
+              loadDevices()
+              setConnectIP('')
+            })
+            .catch(e => setError(String(e.message || e)))
+            .finally(() => setBusy(false))
+        }
       }
 
       const handleScreenshot = () => {
@@ -244,6 +301,33 @@ window.__ModuleLoader__.load({
             h('input', { style: { ...INPUT, flex: 1 }, placeholder: 'IP 地址', value: connectIP, onChange: e => setConnectIP(e.target.value) }),
             h('input', { style: { ...INPUT, width: 80 }, placeholder: '端口', value: connectPort, onChange: e => setConnectPort(e.target.value) }),
             h('button', { style: { ...BTN, background: '#22c55e', color: '#fff' }, onClick: handleConnect, disabled: busy || !connectIP }, '连接')
+          ),
+          isPairMode && h('div', { style: { ...ROW, marginTop: 8 } },
+            h('input', { style: { ...INPUT, flex: 1 }, placeholder: '配对码 (首次连接需要)', value: pairingCode, onChange: e => setPairingCode(e.target.value) }),
+            h('button', { style: { ...BTN, background: '#f59e0b', color: '#000' }, onClick: handleConnect, disabled: busy || !connectIP || !pairingCode }, '配对'),
+            h('button', { style: { ...BTN, background: 'transparent', color: 'var(--dsh-text-secondary, #888)' }, onClick: () => { setIsPairMode(false); setPairingCode('') } }, '取消')
+          ),
+          !isPairMode && h('button', {
+            style: { ...BTN, marginTop: 8, fontSize: 11, color: 'var(--dsh-text-secondary, #888)' },
+            onClick: () => setIsPairMode(true)
+          }, '首次连接？使用配对码'),
+
+          // 历史记录
+          history.length > 0 && h('div', { style: { marginTop: 10, borderTop: '1px solid var(--dsh-border, #333)', paddingTop: 8 } },
+            h('div', { style: { ...LABEL, marginBottom: 6 } }, '📜 历史记录'),
+            history.map(item => 
+              h('div', {
+                key: item.key,
+                style: { ...ROW, justifyContent: 'space-between', padding: '4px 0', cursor: 'pointer' },
+                onClick: () => handleHistoryClick(item)
+              },
+                h('span', { style: { fontSize: 12 } }, item.ip + ':' + item.port),
+                h('button', {
+                  style: { ...BTN, padding: '2px 6px', fontSize: 10, background: 'transparent', color: '#ef4444' },
+                  onClick: (e) => deleteHistory(e, item.key)
+                }, '✕')
+              )
+            )
           )
         ),
 
