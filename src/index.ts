@@ -125,7 +125,7 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
       case 'listDevices': {
         const result = await runAdb(['devices', '-l'], cfg);
         if (result.exitCode !== 0) throw new Error(result.stderr);
-        return { ok: true, value: { server: 'ok', devices: parseDevices(result.stdout) } };
+        return { server: 'ok', devices: parseDevices(result.stdout) };
       }
 
       case 'connect': {
@@ -133,7 +133,8 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const port = payload.port || 5555;
         const target = `${host}:${port}`;
         const result = await runAdb(['connect', target], cfg);
-        return { ok: true, value: { target, connected: true, output: result.stdout } };
+        if (result.exitCode !== 0) throw new Error(result.stderr || '连接失败');
+        return { target, connected: true, output: result.stdout };
       }
 
       case 'pair': {
@@ -141,11 +142,12 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const port = payload.port || 5555;
         const pairingCode = payload.pairingCode;
         if (!pairingCode) {
-          return { ok: false, error: { message: 'pairingCode is required' } };
+          throw new Error('pairingCode 是必填的');
         }
         const target = `${host}:${port}`;
         const result = await runAdb(['pair', target], cfg);
-        return { ok: true, value: { target, paired: true, output: result.stdout } };
+        if (result.exitCode !== 0) throw new Error(result.stderr || '配对失败，请检查 IP、端口和配对码是否正确');
+        return { target, paired: true, output: result.stdout };
       }
 
       case 'disconnect': {
@@ -155,7 +157,7 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const result = target
           ? await runAdb(['disconnect', target], cfg)
           : await runAdb(['disconnect'], cfg);
-        return { ok: true, value: { disconnected: true, output: result.stdout } };
+        return { disconnected: true, output: result.stdout };
       }
 
       case 'getDeviceInfo': {
@@ -167,11 +169,8 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
           runAdb(['shell', 'getprop', 'ro.build.version.sdk'], cfg, { serial }),
         ]);
         return {
-          ok: true,
-          value: {
-            basic: { serial: serial || '', model: model.stdout, brand: brand.stdout },
-            system: { androidVersion: androidVersion.stdout, sdk: parseInt(sdk.stdout) || 0 },
-          },
+          basic: { serial: serial || '', model: model.stdout, brand: brand.stdout },
+          system: { androidVersion: androidVersion.stdout, sdk: parseInt(sdk.stdout) || 0 },
         };
       }
 
@@ -182,33 +181,33 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         await runAdb(['shell', 'screencap', '-p', tempPath], cfg, { serial });
         await runAdb(['pull', tempPath, finalPath], cfg, { serial });
         await runAdb(['shell', 'rm', tempPath], cfg, { serial }).catch(() => {});
-        return { ok: true, value: { path: finalPath } };
+        return { path: finalPath };
       }
 
       case 'screenOn': {
         const serial = payload.serial || cfg?.defaultSerial;
         await runAdb(['shell', 'input', 'keyevent', '26'], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'screenOff': {
         const serial = payload.serial || cfg?.defaultSerial;
         await runAdb(['shell', 'input', 'keyevent', '26'], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'inputTap': {
         const { x, y } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         await runAdb(['shell', 'input', 'tap', String(x), String(y)], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'inputSwipe': {
         const { x1, y1, x2, y2, duration = 300 } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         await runAdb(['shell', 'input', 'swipe', String(x1), String(y1), String(x2), String(y2), String(duration)], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'inputText': {
@@ -216,49 +215,49 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const serial = payload.serial || cfg?.defaultSerial;
         const escapedText = text.replace(/ /g, '%s');
         await runAdb(['shell', 'input', 'text', escapedText], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'inputKeyevent': {
         const { keyCode } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         await runAdb(['shell', 'input', 'keyevent', String(keyCode)], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'listPackages': {
         const serial = payload.serial || cfg?.defaultSerial;
         const result = await runAdb(['shell', 'pm', 'list', 'packages'], cfg, { serial });
         const packages = result.stdout.split('\n').map((p: string) => p.replace(/^package:/, '').trim()).filter(Boolean);
-        return { ok: true, value: { packages, count: packages.length } };
+        return { packages, count: packages.length };
       }
 
       case 'install': {
         const { apkPath } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         const result = await runAdb(['install', '-r', '-g', apkPath], cfg, { serial });
-        return { ok: true, value: { success: result.stdout.includes('Success'), output: result.stdout } };
+        return { success: result.stdout.includes('Success'), output: result.stdout };
       }
 
       case 'uninstall': {
         const { packageName } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         const result = await runAdb(['uninstall', packageName], cfg, { serial });
-        return { ok: true, value: { success: result.stdout.includes('Success'), output: result.stdout } };
+        return { success: result.stdout.includes('Success'), output: result.stdout };
       }
 
       case 'launch': {
         const { packageName } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         await runAdb(['shell', 'am', 'start', '-n', `${packageName}/.MainActivity`], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'forceStop': {
         const { packageName } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         await runAdb(['shell', 'am', 'force-stop', packageName], cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       case 'meminfo': {
@@ -289,11 +288,11 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const result = await runAdb(['shell', 'cat', '/proc/cpuinfo'], cfg, { serial });
         const lines = result.stdout.split('\n');
         const cores = lines.filter((l: string) => l.startsWith('processor')).length;
-        return { ok: true, value: { cores, features: [] } };
+        return { cores, features: [] };
       }
 
       case 'fps': {
-        return { ok: true, value: { fps: 60, status: 'good' } };
+        return { fps: 60, status: 'good' };
       }
 
       case 'battery': {
@@ -303,7 +302,7 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const tempMatch = result.stdout.match(/temperature:\s*(\d+)/);
         const level = levelMatch ? parseInt(levelMatch[1]) : 0;
         const temperature = tempMatch ? parseInt(tempMatch[1]) / 10 : 0;
-        return { ok: true, value: { level, temperature, status: 'unknown' } };
+        return { level, temperature, status: 'unknown' };
       }
 
       case 'logcat': {
@@ -315,21 +314,21 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         if (buffer) args.push('-b', buffer);
         args.push(`*:${level}`);
         const result = await runAdb(args, cfg, { serial });
-        return { ok: true, value: { log: result.stdout } };
+        return { log: result.stdout };
       }
 
       case 'dumpsys': {
         const { service } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         const result = await runAdb(['shell', 'dumpsys', service], cfg, { serial });
-        return { ok: true, value: { service, info: result.stdout } };
+        return { service, info: result.stdout };
       }
 
       case 'getprop': {
         const { property } = payload;
         const serial = payload.serial || cfg?.defaultSerial;
         const result = await runAdb(['shell', 'getprop', property], cfg, { serial });
-        return { ok: true, value: { property, value: result.stdout } };
+        return { property, value: result.stdout };
       }
 
       case 'reboot': {
@@ -337,7 +336,7 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const serial = payload.serial || cfg?.defaultSerial;
         const cmd = mode === 'normal' ? ['reboot'] : ['reboot', mode];
         await runAdb(cmd, cfg, { serial });
-        return { ok: true, value: { success: true } };
+        return { success: true };
       }
 
       default:
