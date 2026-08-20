@@ -1,9 +1,12 @@
 # dsh-adb-ultimate
 
-[English](README.md) | [中文](README.zh.md)
+[English](README.md) · [中文](README.zh.md)
 
 [![npm](https://img.shields.io/npm/v/dsh-adb-ultimate)](https://www.npmjs.com/package/dsh-adb-ultimate)
 [![stars](https://img.shields.io/github/stars/newborne/dsh-adb-ultimate?style=flat)](https://github.com/newborne/dsh-adb-ultimate)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Version: 1.0.0**
 
 Full-featured ADB device management plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness).
 
