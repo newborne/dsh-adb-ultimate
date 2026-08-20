@@ -7,7 +7,7 @@
 
 全功能 ADB 设备管理插件，专为 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) 设计。
 
-![插件总览](./2.png)
+![插件总览](./assets/2.png)
 
 ## 🚀 项目动机
 
@@ -94,25 +94,25 @@ dsh plugin --profile web add /path/to/dsh-adb-ultimate
 
 在平板上开启 WiFi ADB 调试，并可通过 DROID Linux 环境进行管理：
 
-![平板端配置](./1.png)
+![平板端配置](./assets/1.png)
 
 ### 2. 插件功能总览
 
 DSH Web UI 中嵌入完整的设备管理面板，包含：屏幕监控、性能、应用详情标签页：
 
-![插件功能总览](./2.png)
+![插件功能总览](./assets/2.png)
 
 ### 3. 设备连接管理
 
 支持连接新设备、查看历史记录、管理已连接设备：
 
-![设备连接管理](./3.png)
+![设备连接管理](./assets/3.png)
 
 ### 4. 实时屏幕监控
 
 开启后可以实时查看设备屏幕，1 秒间隔自动刷新：
 
-![实时屏幕监控](./4.png)
+![实时屏幕监控](./assets/4.png)
 
 ## 📄 License
 

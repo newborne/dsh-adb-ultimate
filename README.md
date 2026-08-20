@@ -7,7 +7,7 @@
 
 Full-featured ADB device management plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness).
 
-![Plugin Overview](./2.png)
+![Plugin Overview](./assets/2.png)
 
 ## Features
 
@@ -81,25 +81,25 @@ Just tell Agent:
 
 Enable WiFi ADB debugging on your tablet:
 
-![Tablet Config](./1.png)
+![Tablet Config](./assets/1.png)
 
 ### 2. Plugin Overview
 
 DSH Web UI embeds a complete device management panel:
 
-![Plugin Overview](./2.png)
+![Plugin Overview](./assets/2.png)
 
 ### 3. Device Connection
 
 Connect new devices, view history, manage connected devices:
 
-![Device Connection](./3.png)
+![Device Connection](./assets/3.png)
 
 ### 4. Real-time Screen Monitoring
 
 Real-time device screen with 1-second auto-refresh:
 
-![Screen Monitoring](./4.png)
+![Screen Monitoring](./assets/4.png)
 
 ## License
 
