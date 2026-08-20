@@ -6,8 +6,6 @@
 [![stars](https://img.shields.io/github/stars/newborne/dsh-adb-ultimate?style=flat)](https://github.com/newborne/dsh-adb-ultimate)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Version: 1.0.0**
-
 Full-featured ADB device management plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness).
 
 ![Plugin Overview](./assets/2.png)
