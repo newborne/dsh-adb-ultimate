@@ -51,12 +51,16 @@ async function runAdb(command: string[], cfg: any, options: any = {}): Promise<{
     return { exitCode: 0, stdout: stdout.trim(), stderr: stderr.trim() };
   } catch (error: any) {
     if (error.code === 'ENOENT') {
-      return { exitCode: -1, stdout: '', stderr: `ADB not found at: ${getAdbPath()}` };
+      return { 
+        exitCode: -1, 
+        stdout: '', 
+        stderr: `ADB 未安装！\n\n请安装 Android SDK Platform Tools：\n  Ubuntu/Debian: sudo apt install adb\n  或下载: https://developer.android.com/studio/releases/platform-tools\n\n注意：WiFi 配对功能需要 ADB 版本 ≥ 1.0.41` 
+      };
     }
     if (error.killed) {
-      return { exitCode: -2, stdout: '', stderr: 'Command timed out' };
+      return { exitCode: -2, stdout: '', stderr: '命令超时' };
     }
-    return { exitCode: -3, stdout: '', stderr: error.message || 'Unknown error' };
+    return { exitCode: -3, stdout: '', stderr: error.message || '未知错误' };
   }
 }
 
