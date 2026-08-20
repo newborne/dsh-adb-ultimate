@@ -56,14 +56,7 @@ async function runAdb(command: string[], cfg: any, options: any = {}): Promise<{
         stdout: '', 
         stderr: `ADB 未安装！请把以下提示词复制给 Agent：
 
-"请帮我安装 Android SDK Platform Tools (ADB)，要求：
-1. 自动检测你的操作系统和架构
-2. 安装最新版本的 ADB（需要支持 WiFi 配对功能，版本 ≥ 1.0.41）
-3. 安装完成后执行 'adb version' 验证
-4. 执行 'adb pair' 命令测试配对功能是否正常
-
-对于 Linux/macOS，可以从 https://developer.android.com/studio/releases/platform-tools 下载，或用包管理器安装。
-对于 Windows，可以下载 SDK Platform Tools 或使用 winget install Google.PlatformTools"` 
+"安装最新版的 ADB 并适配当前平台，测试命令成功调用。"` 
       };
     }
     if (error.killed) {
