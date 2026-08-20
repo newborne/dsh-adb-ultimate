@@ -292,12 +292,60 @@ window.__ModuleLoader__.load({
           h('button', { style: { ...BTN, background: 'var(--dsh-accent, #4285f4)', color: '#fff' }, onClick: loadDevices, disabled: busy }, busy ? '加载中…' : '🔄 刷新')
         ),
 
-        error && h('div', { 
+        // ADB 未安装提示卡片
+        error && error.includes('ADB 未安装') && h('div', { 
           style: { 
-            color: error.includes('ADB 未安装') ? '#f59e0b' : '#ef4444', 
+            margin: '12px 0', 
+            padding: 16, 
+            background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(34,197,94,0.15))', 
+            borderRadius: 12,
+            border: '1px solid rgba(245,158,11,0.3)',
+          } 
+        },
+          h('div', { style: { fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#f59e0b' } }, '🔧 ADB 未安装'),
+          h('div', { style: { fontSize: 13, marginBottom: 12, color: 'var(--dsh-text, #fff)' } }, '请点击下方按钮复制安装指令，粘贴给 Agent 执行'),
+          h('div', { 
+            style: { 
+              background: 'rgba(0,0,0,0.3)', 
+              borderRadius: 8, 
+              padding: '12px 16px',
+              position: 'relative',
+              border: '1px solid rgba(255,255,255,0.1)',
+              marginBottom: 12
+            }
+          },
+            h('div', { style: { fontSize: 12, color: '#aaa', marginBottom: 6 } }, '复制此提示词给 Agent：'),
+            h('div', { style: { fontSize: 13, color: '#fff', fontFamily: 'monospace', lineHeight: 1.5 } }, 
+              '"安装最新版的 ADB 并适配当前平台，测试命令成功调用。"'
+            ),
+            h('button', {
+              style: {
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                padding: '4px 12px',
+                background: '#22c55e',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: 'pointer',
+                fontSize: 12,
+              },
+              onClick: () => {
+                navigator.clipboard.writeText('安装最新版的 ADB 并适配当前平台，测试命令成功调用。')
+                alert('已复制！粘贴给 Agent 执行')
+              }
+            }, '📋 复制')
+          )
+        ),
+
+        // 其他错误
+        error && !error.includes('ADB 未安装') && h('div', { 
+          style: { 
+            color: '#ef4444', 
             margin: '8px 0', 
             padding: 12, 
-            background: error.includes('ADB 未安装') ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)', 
+            background: 'rgba(239,68,68,0.1)', 
             borderRadius: 4,
             whiteSpace: 'pre-line',
             fontSize: 12,
