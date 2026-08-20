@@ -4,6 +4,9 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-adb-ultimate)](https://www.npmjs.com/package/dsh-adb-ultimate)
 [![stars](https://img.shields.io/github/stars/newborne/dsh-adb-ultimate?style=flat)](https://github.com/newborne/dsh-adb-ultimate)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**版本: 1.0.0**
 
 全功能 ADB 设备管理插件，专为 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) 设计。
 

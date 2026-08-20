@@ -12,6 +12,19 @@ Full-featured ADB device management plugin for [DeepSeek Harness (DSH)](https://
 
 ![Plugin Overview](./assets/2.png)
 
+## 🚀 Project Motivation
+
+I have a Linux environment called **DROID** running on my Android tablet, with **DSH** deployed in it.
+
+> As a tech enthusiast, I wanted to **control my device with AI** to achieve "self-control" — letting AI:
+> - See the device's real-time screen
+> - Execute any system operations
+> - Automatically manage apps and files on the device
+> - Monitor system performance and status
+> - ...
+
+With this idea, **dsh-adb-ultimate** was born. It enables DSH to fully control Android devices through the ADB protocol, truly realizing "AI as your phone assistant".
+
 ## Features
 
 ### 📱 Device Panel
