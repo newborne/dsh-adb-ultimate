@@ -1,122 +1,106 @@
 # dsh-adb-ultimate
 
-全功能 ADB 设备管理插件，专为 [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness) 设计。
+[English](README.md) | [中文](README.zh.md)
 
----
+[![npm](https://img.shields.io/npm/v/dsh-adb-ultimate)](https://www.npmjs.com/package/dsh-adb-ultimate)
+[![stars](https://img.shields.io/github/stars/newborne/dsh-adb-ultimate?style=flat)](https://github.com/newborne/dsh-adb-ultimate)
 
-## 🚀 项目动机
+Full-featured ADB device management plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness).
 
-我在平板的安卓系统里内置了一个叫 **DROID** 的 Linux 环境，并在其中部署了 **DSH 服务**。
+![Plugin Overview](./2.png)
 
-> 作为一个热爱折腾的极客，我希望能够**用 AI 来操控自己的设备**，实现「自我控制」—— 让 AI 能够：
-> - 看到设备的实时屏幕
-> - 执行任意的系统操作
-> - 自动化管理设备上的应用和文件
-> - 监控系统性能和状态
-> - ……
+## Features
 
-带着这样的想法，**dsh-adb-ultimate** 插件诞生了。它让 DSH 能够通过 ADB 协议全面控制 Android 设备，真正实现「AI 做你的手机管家」。
+### 📱 Device Panel
 
----
+Embeds a complete device management panel in the DSH session with 5 tabs:
 
-## 🔧 安装
+| Tab | Features |
+|-----|----------|
+| 🖥️ **Screen** | Real-time device screen monitoring with play/pause (1s interval) |
+| 📊 **Performance** | Real-time memory, CPU, battery status (auto-refresh) |
+| 📋 **Info** | Device model, Android version, serial number, etc. |
+| 📦 **Apps** | Browse, search, view app details (version, permissions) |
+| 📝 **Logs** | Real-time logcat output with V/D/I/W/E level filtering |
 
-> 💡 将以下任意安装命令复制给 Agent 即可自动安装
+### 🔌 Device Connection
 
-### 方式一：GitHub 安装
+- **WiFi Connect** - Connect to Android device via IP address
+- **WiFi Pair** - Support pairing verification for first-time connections
+- **Connection History** - Auto-save history for quick reconnect
+- **Multi-device** - Manage multiple devices simultaneously
+
+### 🎮 Device Control
+
+- **Screen** - Screenshot, screen on/off, real-time monitoring
+- **Input** - Tap, swipe, text input, key events
+- **Apps** - Install, uninstall, launch, force stop
+- **File** - Push/pull files
+
+### 📊 Performance Monitoring
+
+- **Memory** - Real-time RAM usage
+- **Battery** - Level, temperature, health status
+- **CPU** - Cores, processor model
+
+### 🔧 System Debug
+
+- **Logcat** - Real-time log output with level filtering
+- **Dumpsys** - Query system service info
+- **Getprop** - Read system properties
+- **Shell** - Execute shell commands directly
+
+## Install
+
+> 💡 Copy any install command below and give it to Agent for automatic installation
+
+### Way 1: GitHub Install
 
 ```bash
 dsh plugin --profile web add github:newborne/dsh-adb-ultimate
 ```
 
-### 方式二：本地安装
+### Way 2: Local Install
 
 ```bash
-# 克隆仓库
+# Clone the repo
 git clone https://github.com/newborne/dsh-adb-ultimate.git
 
-# 安装到 DSH
+# Install to DSH
 dsh plugin --profile web add /path/to/dsh-adb-ultimate
 ```
 
-### 方式三：自然语言安装
+### Way 3: Natural Language Install
 
-直接对 Agent 说：
-> "帮我安装这个插件：https://github.com/newborne/dsh-adb-ultimate"
+Just tell Agent:
+> "Help me install this plugin: https://github.com/newborne/dsh-adb-ultimate"
 
----
+## Interface Preview
 
-## 📸 界面预览
+### 1. Tablet Configuration
 
-### 1. 平板端配置
+Enable WiFi ADB debugging on your tablet:
 
-在平板上开启 WiFi ADB 调试，并可通过 DROID Linux 环境进行管理：
+![Tablet Config](./1.png)
 
-![平板端配置](./1.png)
+### 2. Plugin Overview
 
-### 2. 插件功能总览
+DSH Web UI embeds a complete device management panel:
 
-DSH Web UI 中嵌入完整的设备管理面板，包含：屏幕监控、性能、应用详情标签页：
+![Plugin Overview](./2.png)
 
-![插件功能总览](./2.png)
+### 3. Device Connection
 
-### 3. 设备连接管理
+Connect new devices, view history, manage connected devices:
 
-支持连接新设备、查看历史记录、管理已连接设备：
+![Device Connection](./3.png)
 
-![设备连接管理](./3.png)
+### 4. Real-time Screen Monitoring
 
-### 4. 实时屏幕监控
+Real-time device screen with 1-second auto-refresh:
 
-开启后可以实时查看设备屏幕，1 秒间隔自动刷新：
+![Screen Monitoring](./4.png)
 
-![实时屏幕监控](./4.png)
-
----
-
-## ✨ 功能介绍
-
-### 📱 设备面板
-
-在 DSH 会话中嵌入完整的设备管理面板，包含 5 个标签页：
-
-| 标签 | 功能 |
-|------|------|
-| 🖥️ **屏幕** | 实时监控设备屏幕，支持播放/暂停（1秒间隔） |
-| 📊 **性能** | 实时显示内存、CPU、电池状态（自动刷新） |
-| 📋 **信息** | 设备型号、Android 版本、序列号等 |
-| 📦 **应用** | 浏览、搜索、查看应用详情（版本号、权限等） |
-| 📝 **日志** | 实时 logcat 输出，支持 V/D/I/W/E 级别过滤 |
-
-### 🔌 设备连接
-
-- **无线连接** - 通过 IP 地址连接 Android 设备
-- **WiFi 配对** - 支持首次连接时的配对验证
-- **连接历史** - 自动保存连接历史，快速重连
-- **多设备管理** - 同时管理多台设备
-
-### 🎮 设备控制
-
-- **屏幕** - 截图、屏幕开关、实时监控
-- **输入** - 点击、滑动、文本输入、按键事件
-- **应用** - 安装、卸载、启动、强制停止
-- **文件** - 推送、拉取文件
-
-### 📊 性能监控
-
-- **内存** - 实时 RAM 使用率
-- **电池** - 电量百分比、温度、健康状态
-- **CPU** - 核心数、处理器型号
-
-### 🔧 系统调试
-
-- **Logcat** - 实时日志输出，按级别过滤
-- **Dumpsys** - 查询系统服务信息
-- **Getprop** - 读取系统属性
-- **Shell** - 直接执行 Shell 命令
-
----
-
-## 📄 License
+## License
 
 MIT
