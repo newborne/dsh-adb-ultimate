@@ -36,14 +36,15 @@ window.__ModuleLoader__.load({
 
     // 工具调用封装
     function unwrap(value) {
-      if (typeof value !== 'object' || value === null) {
-        throw new Error('dsh-adb-ultimate host returned invalid response')
+      // 如果是框架包装的 {ok, value} 格式
+      if (typeof value === 'object' && value !== null && 'ok' in value) {
+        if (value.ok === true && 'value' in value) return value.value
+        if (value.ok === false && value.error) {
+          throw new Error(value.error.message ?? 'dsh-adb-ultimate request failed')
+        }
       }
-      if (value.ok === true && 'value' in value) return value.value
-      if (value.ok === false && value.error) {
-        throw new Error(value.error.message ?? 'dsh-adb-ultimate request failed')
-      }
-      throw new Error('dsh-adb-ultimate host returned invalid response')
+      // 直接返回值的情况
+      return value
     }
 
     function createRuntime(rpc) {
