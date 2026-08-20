@@ -292,7 +292,18 @@ window.__ModuleLoader__.load({
           h('button', { style: { ...BTN, background: 'var(--dsh-accent, #4285f4)', color: '#fff' }, onClick: loadDevices, disabled: busy }, busy ? '加载中…' : '🔄 刷新')
         ),
 
-        error && h('div', { style: { color: '#ef4444', margin: '8px 0', padding: 8, background: 'rgba(239,68,68,0.1)', borderRadius: 4 } }, error),
+        error && h('div', { 
+          style: { 
+            color: error.includes('ADB 未安装') ? '#f59e0b' : '#ef4444', 
+            margin: '8px 0', 
+            padding: 12, 
+            background: error.includes('ADB 未安装') ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)', 
+            borderRadius: 4,
+            whiteSpace: 'pre-line',
+            fontSize: 12,
+            lineHeight: 1.5
+          } 
+        }, error),
 
         // 连接新设备
         h('div', { style: { ...CARD, background: 'var(--dsh-accent-soft, rgba(66,133,244,.1))' } },
