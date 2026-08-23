@@ -1,6 +1,6 @@
 {
   "name": "dsh-adb-ultimate",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "ADB Ultimate - 全功能ADB设备管理插件 for DeepSeek Harness",
   "type": "module",
   "main": "lib/index.js",
