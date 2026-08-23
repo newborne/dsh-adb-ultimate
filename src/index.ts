@@ -56,7 +56,7 @@ async function runAdb(command: string[], cfg: any, options: any = {}): Promise<{
       return { 
         exitCode: -1, 
         stdout: '', 
-        stderr: 'ADB未安装，请复制以下内容给Agent: 安装最新版的ADB并适配当前平台，测试命令成功调用。' 
+        stderr: 'ADB未安装，请复制以下内容给Agent: 安装谷歌官方ADB包，版本>=34.0.5，测试命令成功调用。' 
       };
     }
     if (error.killed) {

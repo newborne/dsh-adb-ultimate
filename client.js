@@ -390,7 +390,7 @@ window.__ModuleLoader__.load({
     // DEVICE CARD COMPONENT
     // ============================================================
     
-    function DeviceCard({ device, selected, onSelect }) {
+    function DeviceCard({ device, selected, onSelect, onDisconnect }) {
       const isOnline = device.state === 'device'
       
       return h('div', {
@@ -422,10 +422,26 @@ window.__ModuleLoader__.load({
               h('div', { style: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 } }, device.serial)
             )
           ),
-          StatusBadge({
-            text: isOnline ? 'Online' : device.state,
-            color: isOnline ? COLORS.success : COLORS.error,
-          })
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+            StatusBadge({
+              text: isOnline ? 'Online' : device.state,
+              color: isOnline ? COLORS.success : COLORS.error,
+            }),
+            h('button', {
+              onClick: (e) => { e.stopPropagation(); onDisconnect(device); },
+              style: {
+                background: COLORS.errorBg,
+                border: `1px solid ${COLORS.error}`,
+                borderRadius: 6,
+                color: COLORS.error,
+                cursor: 'pointer',
+                padding: '4px 8px',
+                fontSize: 12,
+                fontWeight: 600,
+              },
+              title: '断开连接',
+            }, '✕')
+          )
         ),
         device.product && h('div', { 
           style: { 
@@ -510,6 +526,7 @@ window.__ModuleLoader__.load({
         processList: (serial) => runtime.processList(serial),
         logcat: (options, serial) => runtime.logcat({ ...options }, serial),
         connect: (host, port) => runtime.connect(host, port),
+        disconnect: (host, port) => runtime.disconnect(host, port),
         pair: (host, port, code) => runtime.pair(host, port, code),
         install: (apkPath, serial) => runtime.install(apkPath, serial),
         uninstall: (pkg, serial) => runtime.uninstall(pkg, serial),
@@ -774,15 +791,33 @@ window.__ModuleLoader__.load({
           : api.connect(connectIP, parseInt(connectPort) || 5555)
         
         promise
-          .then(() => {
+          .then(async () => {
             addToHistory(connectIP, connectPort)
-            loadDevices()
+            await loadDevices()
+            // Auto-select first device if none selected
+            const data = await api.listDevices()
+            const newDevices = data.devices || []
+            if (!selected && newDevices.length > 0) {
+              setSelected(newDevices[0])
+            }
             setConnectIP('')
             setPairingCode('')
             setIsPairMode(false)
           })
           .catch(e => setError(e.message))
           .finally(() => setBusy(false))
+      }
+      
+      const handleDisconnect = async (device) => {
+        if (!confirm(`断开 ${device.model || device.serial}？`)) return
+        try {
+          const [host, port] = device.serial.includes(':') ? device.serial.split(':') : [device.serial, null]
+          await api.disconnect(host, port || undefined)
+          if (selected?.serial === device.serial) setSelected(null)
+          loadDevices()
+        } catch (e) {
+          alert('断开失败: ' + e.message)
+        }
       }
       
       const handleUninstall = async (pkg) => {
@@ -1688,7 +1723,22 @@ window.__ModuleLoader__.load({
                     cursor: 'pointer',
                     fontSize: 11,
                   },
-                  onClick: () => { setConnectIP(item.ip); setConnectPort(item.port) }
+                  onClick: async () => {
+                    setBusy(true)
+                    try {
+                      await api.connect(item.ip, parseInt(item.port) || 5555)
+                      await loadDevices()
+                      const data = await api.listDevices()
+                      const newDevices = data.devices || []
+                      if (!selected && newDevices.length > 0) {
+                        setSelected(newDevices[0])
+                      }
+                    } catch (e) {
+                      alert('连接失败: ' + e.message)
+                    } finally {
+                      setBusy(false)
+                    }
+                  }
                 },
                   h('span', null, `${item.ip}:${item.port}`),
                   h('button', {
@@ -1712,7 +1762,7 @@ window.__ModuleLoader__.load({
         h('div', { style: { ...styles.label, marginBottom: 8 } }, `已连接设备 (${devices.length})`),
         devices.length === 0
           ? h('div', { style: { ...styles.card, textAlign: 'center', padding: 32, color: COLORS.textSecondary } }, '暂无设备')
-          : devices.map(d => h(DeviceCard, { key: d.serial, device: d, selected, onSelect: setSelected })),
+          : devices.map(d => h(DeviceCard, { key: d.serial, device: d, selected, onSelect: setSelected, onDisconnect: handleDisconnect })),
         
         // Selected Device Panel
         selected && h('div', { style: styles.card },
