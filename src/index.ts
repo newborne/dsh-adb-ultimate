@@ -100,6 +100,162 @@ function parseDevices(output: string): any[] {
   return devices;
 }
 
+// ============================================================
+// UI Tree 解析
+// ============================================================
+
+interface UiNode {
+  index: number;
+  text: string;
+  contentDesc: string;
+  resourceId: string;
+  className: string;
+  packageName: string;
+  clickable: boolean;
+  enabled: boolean;
+  bounds: { left: number; top: number; right: number; bottom: number };
+  children: UiNode[];
+}
+
+interface Selector {
+  text?: string;
+  textContains?: string;
+  description?: string;
+  resourceId?: string;
+  className?: string;
+  packageName?: string;
+  index?: number;
+}
+
+// 解析 uiautomator dump 输出
+function parseUiTree(xml: string): UiNode[] {
+  const nodes: UiNode[] = [];
+  
+  // 匹配每个 node 元素
+  const nodeRegex = /<node[^>]*\/?>/g;
+  let match;
+  let index = 0;
+  
+  while ((match = nodeRegex.exec(xml)) !== null) {
+    const nodeStr = match[0];
+    const node: UiNode = {
+      index: index++,
+      text: '',
+      contentDesc: '',
+      resourceId: '',
+      className: '',
+      packageName: '',
+      clickable: false,
+      enabled: true,
+      bounds: { left: 0, top: 0, right: 0, bottom: 0 },
+      children: [],
+    };
+    
+    // 解析属性
+    const attrRegex = /(\w+)="([^"]*)"/g;
+    let attrMatch;
+    while ((attrMatch = attrRegex.exec(nodeStr)) !== null) {
+      const [, key, value] = attrMatch;
+      switch (key) {
+        case 'text': node.text = value; break;
+        case 'content-desc': node.contentDesc = value; break;
+        case 'resource-id': node.resourceId = value; break;
+        case 'class': node.className = value; break;
+        case 'package': node.packageName = value; break;
+        case 'clickable': node.clickable = value === 'true'; break;
+        case 'enabled': node.enabled = value === 'true'; break;
+        case 'bounds': {
+          const [l, t, r, b] = value.replace(/[\[\]]/g, '').split(',').map(Number);
+          node.bounds = { left: l, top: t, right: r, bottom: b };
+          break;
+        }
+      }
+    }
+    
+    nodes.push(node);
+  }
+  
+  return nodes;
+}
+
+// 查找匹配选择器的节点
+function findNodesBySelector(nodes: UiNode[], selector: Selector): UiNode[] {
+  const results: UiNode[] = [];
+  
+  for (const node of nodes) {
+    let match = true;
+    
+    if (selector.text !== undefined && node.text !== selector.text) match = false;
+    if (selector.textContains !== undefined && !node.text.includes(selector.textContains) && !node.contentDesc.includes(selector.textContains)) match = false;
+    if (selector.description !== undefined && node.contentDesc !== selector.description) match = false;
+    if (selector.resourceId !== undefined && !node.resourceId.includes(selector.resourceId)) match = false;
+    if (selector.className !== undefined && !node.className.includes(selector.className)) match = false;
+    if (selector.packageName !== undefined && node.packageName !== selector.packageName) match = false;
+    
+    if (match) results.push(node);
+  }
+  
+  return results;
+}
+
+// 获取节点的中心点
+function getNodeCenter(node: UiNode): { x: number; y: number } {
+  const { left, top, right, bottom } = node.bounds;
+  return {
+    x: Math.round((left + right) / 2),
+    y: Math.round((top + bottom) / 2),
+  };
+}
+
+// 压缩 UI 树（省 token）
+function compactUiTree(nodes: UiNode[]): string[] {
+  const lines: string[] = [];
+  
+  function traverse(node: UiNode, depth: number = 0) {
+    const indent = '  '.repeat(depth);
+    const parts: string[] = [];
+    
+    if (node.text) parts.push(`"${node.text}"`);
+    if (node.contentDesc) parts.push(`desc="${node.contentDesc}"`);
+    if (node.resourceId) {
+      const id = node.resourceId.split('/').pop() || node.resourceId;
+      parts.push(`id="${id}"`);
+    }
+    if (node.className) {
+      const cls = node.className.split('.').pop() || node.className;
+      parts.push(`<${cls}>`);
+    }
+    if (node.clickable) parts.push('[clickable]');
+    if (!node.enabled) parts.push('[disabled]');
+    
+    if (parts.length > 0) {
+      lines.push(`${indent}└ ${parts.join(' ')}`);
+    }
+    
+    for (const child of node.children) {
+      traverse(child, depth + 1);
+    }
+  }
+  
+  for (const node of nodes) {
+    traverse(node);
+  }
+  
+  return lines;
+}
+
+// 获取完整 UI 树（原始格式）
+function dumpUiTree(nodes: UiNode[]): string {
+  const lines: string[] = [];
+  
+  for (const node of nodes) {
+    const { left, top, right, bottom } = node.bounds;
+    lines.push(`[${node.index}] ${node.className.split('.').pop()} text="${node.text}" desc="${node.contentDesc}" id="${node.resourceId}" clickable=${node.clickable} bounds=[${left},${top},${right},${bottom}]`);
+  }
+  
+  return lines.join('\n');
+}
+
 // 插件信息
 export const name = 'dsh-adb-ultimate';
 
@@ -430,6 +586,99 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const serial = payload.serial || cfg?.defaultSerial;
         const cmd = mode === 'normal' ? ['reboot'] : ['reboot', mode];
         await runAdb(cmd, cfg, { serial });
+        return { ok: true, value: { success: true } };
+      }
+
+      // v1.2: UI Tree
+      case 'getUiTree': {
+        const serial = payload.serial || cfg?.defaultSerial;
+        const compact = payload.compact || false;
+        await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+        const dumpResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+        await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+        const nodes = parseUiTree(dumpResult.stdout);
+        const tree = compact ? compactUiTree(nodes).join('\n') : dumpUiTree(nodes);
+        return { ok: true, value: { tree, count: nodes.length } };
+      }
+
+      case 'tapElement': {
+        const { selector } = payload;
+        const serial = payload.serial || cfg?.defaultSerial;
+        await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+        const dumpResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+        await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+        const nodes = parseUiTree(dumpResult.stdout);
+        const matches = findNodesBySelector(nodes, selector);
+        if (matches.length === 0) {
+          return { ok: false, error: { code: 'not_found', message: '未找到匹配的元素' } };
+        }
+        const target = matches[0];
+        const center = getNodeCenter(target);
+        await runAdb(['shell', 'input', 'tap', String(center.x), String(center.y)], cfg, { serial });
+        return { ok: true, value: { success: true, element: { text: target.text, description: target.contentDesc, resourceId: target.resourceId, bounds: target.bounds, position: center } } };
+      }
+
+      case 'waitForElement': {
+        const { selector, timeout = 10 } = payload;
+        const serial = payload.serial || cfg?.defaultSerial;
+        const startTime = Date.now();
+        while (Date.now() - startTime < timeout * 1000) {
+          await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+          const dumpResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+          await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+          const nodes = parseUiTree(dumpResult.stdout);
+          const matches = findNodesBySelector(nodes, selector);
+          if (matches.length > 0) {
+            const target = matches[0];
+            return { ok: true, value: { found: true, element: { text: target.text, description: target.contentDesc, resourceId: target.resourceId, bounds: target.bounds } } };
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        return { ok: true, value: { found: false } };
+      }
+
+      case 'scrollToElement': {
+        const { selector, maxSwipes = 10 } = payload;
+        const serial = payload.serial || cfg?.defaultSerial;
+        const wmResult = await runAdb(['shell', 'wm', 'size'], cfg, { serial });
+        const sizeMatch = wmResult.stdout.match(/(\d+)x(\d+)/);
+        if (!sizeMatch) {
+          return { ok: false, error: { code: 'internal', message: '无法获取屏幕分辨率' } };
+        }
+        const width = parseInt(sizeMatch[1]);
+        const height = parseInt(sizeMatch[2]);
+        for (let i = 0; i < maxSwipes; i++) {
+          await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+          const dumpResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+          await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+          const nodes = parseUiTree(dumpResult.stdout);
+          const matches = findNodesBySelector(nodes, selector);
+          if (matches.length > 0) {
+            const target = matches[0];
+            return { ok: true, value: { found: true, element: { text: target.text, description: target.contentDesc, resourceId: target.resourceId, bounds: target.bounds }, swipes: i } };
+          }
+          const startX = Math.round(width / 2);
+          const startY = Math.round(height * 0.8);
+          const endX = Math.round(width / 2);
+          const endY = Math.round(height * 0.3);
+          await runAdb(['shell', 'input', 'swipe', String(startX), String(startY), String(endX), String(endY), '300'], cfg, { serial });
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        return { ok: true, value: { found: false, swipes: maxSwipes } };
+      }
+
+      case 'longPress': {
+        const { x, y, duration = 500 } = payload;
+        const serial = payload.serial || cfg?.defaultSerial;
+        await runAdb(['shell', 'input', 'swipe', String(x), String(y), String(x), String(y), String(duration)], cfg, { serial });
+        return { ok: true, value: { success: true } };
+      }
+
+      case 'launchApp': {
+        const { package: pkg, activity } = payload;
+        const serial = payload.serial || cfg?.defaultSerial;
+        const component = activity ? `${pkg}/${activity}` : `${pkg}/.MainActivity`;
+        await runAdb(['shell', 'am', 'start', '-n', component], cfg, { serial });
         return { ok: true, value: { success: true } };
       }
 
@@ -851,6 +1100,396 @@ export function apply(ctx: any, config: any) {
       const cmd = args.mode ? ['reboot', args.mode] : ['reboot'];
       await runAdb(cmd, cfg, { serial });
       return { ok: true, value: { success: true } };
+    },
+  });
+
+  // ============================================================
+  // v1.2: 扩展 ADB 工具
+  // ============================================================
+
+  ctx.tools.register({
+    name: 'adb_long_press',
+    description: 'Long press on screen (tap + hold)',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['x', 'y'],
+      properties: {
+        x: { type: 'number', description: 'X coordinate' },
+        y: { type: 'number', description: 'Y coordinate' },
+        duration: { type: 'number', description: 'Duration in ms (default: 500)', default: 500 },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      const duration = args.duration || 500;
+      await runAdb(['shell', 'input', 'swipe', String(args.x), String(args.y), String(args.x), String(args.y), String(duration)], cfg, { serial });
+      return { ok: true, value: { success: true } };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_press_key',
+    description: 'Press hardware/keyboard key (KEYCODE)',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['keycode'],
+      properties: {
+        keycode: { type: 'integer', description: 'Android KeyCode (3=BACK, 4=HOME, 26=POWER, 187=APP_SWITCH, 24=VOLUME_UP, 25=VOLUME_DOWN)' },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      await runAdb(['shell', 'input', 'keyevent', String(args.keycode)], cfg, { serial });
+      return { ok: true, value: { success: true } };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_launch_app',
+    description: 'Launch app by package name',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['package'],
+      properties: {
+        package: { type: 'string', description: 'Package name (e.g., com.android.chrome)' },
+        activity: { type: 'string', description: 'Activity name (optional, starts main if not provided)' },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      let component = args.package;
+      if (args.activity) {
+        component = `${args.package}/${args.activity}`;
+      }
+      await runAdb(['shell', 'am', 'start', '-n', component], cfg, { serial });
+      return { ok: true, value: { success: true } };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_clipboard_get',
+    description: 'Get text from device clipboard',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        text: { type: 'string' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      const result = await runAdb(['shell', 'am', 'broadcast', '-a', 'clipper.get'], cfg, { serial });
+      return { ok: true, value: { text: result.stdout } };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_clipboard_set',
+    description: 'Set text to device clipboard',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['text'],
+      properties: {
+        text: { type: 'string', description: 'Text to copy to clipboard' },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      // 使用 am broadcast 设置剪贴板
+      await runAdb(['shell', 'am', 'broadcast', '-a', 'clipper.set', '--es', 'text', args.text], cfg, { serial });
+      return { ok: true, value: { success: true } };
+    },
+  });
+
+  // ============================================================
+  // v1.2: UI 语义控制工具
+  // ============================================================
+
+  ctx.tools.register({
+    name: 'adb_get_ui_tree',
+    description: 'Get UI hierarchy tree (full version)',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        compact: { type: 'boolean', description: 'Return compact format to save tokens', default: false },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        tree: { type: 'string', description: 'UI tree in text format' },
+        count: { type: 'number', description: 'Number of elements' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      // 使用 uiautomator2 dump
+      const result = await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+      const pullResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+      await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+      
+      const nodes = parseUiTree(pullResult.stdout);
+      const tree = args.compact ? compactUiTree(nodes).join('\n') : dumpUiTree(nodes);
+      
+      return { ok: true, value: { tree, count: nodes.length } };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_tap_element',
+    description: 'Tap element by selector (text, description, resourceId, etc.)',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['selector'],
+      properties: {
+        selector: {
+          type: 'object',
+          description: 'Element selector (one of: text, textContains, description, resourceId)',
+          properties: {
+            text: { type: 'string', description: 'Exact text match' },
+            textContains: { type: 'string', description: 'Text contains' },
+            description: { type: 'string', description: 'Content description match' },
+            resourceId: { type: 'string', description: 'Resource ID contains' },
+            className: { type: 'string', description: 'Class name contains' },
+            packageName: { type: 'string', description: 'Package name exact match' },
+          },
+        },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        element: { type: 'object', description: 'Matched element info' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      
+      // Dump UI tree
+      await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+      const dumpResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+      await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+      
+      const nodes = parseUiTree(dumpResult.stdout);
+      const matches = findNodesBySelector(nodes, args.selector);
+      
+      if (matches.length === 0) {
+        return { ok: false, error: '未找到匹配的元素' };
+      }
+      
+      // 选择第一个匹配的节点
+      const target = matches[0];
+      const center = getNodeCenter(target);
+      
+      // 点击
+      await runAdb(['shell', 'input', 'tap', String(center.x), String(center.y)], cfg, { serial });
+      
+      return { 
+        ok: true, 
+        value: { 
+          success: true, 
+          element: {
+            text: target.text,
+            description: target.contentDesc,
+            resourceId: target.resourceId,
+            bounds: target.bounds,
+            position: center,
+          }
+        } 
+      };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_wait_for',
+    description: 'Wait for element to appear on screen',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['selector'],
+      properties: {
+        selector: {
+          type: 'object',
+          description: 'Element selector',
+          properties: {
+            text: { type: 'string', description: 'Exact text match' },
+            textContains: { type: 'string', description: 'Text contains' },
+            description: { type: 'string', description: 'Content description match' },
+            resourceId: { type: 'string', description: 'Resource ID contains' },
+          },
+        },
+        timeout: { type: 'number', description: 'Timeout in seconds (default: 10)', default: 10 },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        found: { type: 'boolean', description: 'Whether element was found' },
+        element: { type: 'object', description: 'Element info if found' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      const timeout = args.timeout || 10;
+      const startTime = Date.now();
+      
+      while (Date.now() - startTime < timeout * 1000) {
+        await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+        const dumpResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+        await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+        
+        const nodes = parseUiTree(dumpResult.stdout);
+        const matches = findNodesBySelector(nodes, args.selector);
+        
+        if (matches.length > 0) {
+          const target = matches[0];
+          return { 
+            ok: true, 
+            value: { 
+              found: true, 
+              element: {
+                text: target.text,
+                description: target.contentDesc,
+                resourceId: target.resourceId,
+                bounds: target.bounds,
+              }
+            } 
+          };
+        }
+        
+        // 等待 500ms 再试
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      return { ok: true, value: { found: false } };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_scroll_to',
+    description: 'Scroll to find element (swipe down until element appears)',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['selector'],
+      properties: {
+        selector: {
+          type: 'object',
+          description: 'Element selector',
+          properties: {
+            text: { type: 'string', description: 'Exact text match' },
+            textContains: { type: 'string', description: 'Text contains' },
+            description: { type: 'string', description: 'Content description match' },
+            resourceId: { type: 'string', description: 'Resource ID contains' },
+          },
+        },
+        maxSwipes: { type: 'number', description: 'Max swipe attempts (default: 10)', default: 10 },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        found: { type: 'boolean' },
+        element: { type: 'object', description: 'Element info if found' },
+        swipes: { type: 'number', description: 'Number of swipes performed' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      const maxSwipes = args.maxSwipes || 10;
+      
+      // 获取屏幕分辨率
+      const wmResult = await runAdb(['shell', 'wm', 'size'], cfg, { serial });
+      const sizeMatch = wmResult.stdout.match(/(\d+)x(\d+)/);
+      if (!sizeMatch) {
+        return { ok: false, error: '无法获取屏幕分辨率' };
+      }
+      const width = parseInt(sizeMatch[1]);
+      const height = parseInt(sizeMatch[2]);
+      
+      for (let i = 0; i < maxSwipes; i++) {
+        // Dump and check
+        await runAdb(['shell', 'uiautomator', 'dump', '/sdcard/dump.xml'], cfg, { serial });
+        const dumpResult = await runAdb(['shell', 'cat', '/sdcard/dump.xml'], cfg, { serial });
+        await runAdb(['shell', 'rm', '/sdcard/dump.xml'], cfg, { serial }).catch(() => {});
+        
+        const nodes = parseUiTree(dumpResult.stdout);
+        const matches = findNodesBySelector(nodes, args.selector);
+        
+        if (matches.length > 0) {
+          const target = matches[0];
+          return { 
+            ok: true, 
+            value: { 
+              found: true, 
+              element: {
+                text: target.text,
+                description: target.contentDesc,
+                resourceId: target.resourceId,
+                bounds: target.bounds,
+              },
+              swipes: i 
+            } 
+          };
+        }
+        
+        // 向上滑动 (从底部向上)
+        const startX = Math.round(width / 2);
+        const startY = Math.round(height * 0.8);
+        const endX = Math.round(width / 2);
+        const endY = Math.round(height * 0.3);
+        await runAdb(['shell', 'input', 'swipe', String(startX), String(startY), String(endX), String(endY), '300'], cfg, { serial });
+        
+        // 等待滑动完成
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      return { ok: true, value: { found: false, swipes: maxSwipes } };
     },
   });
 

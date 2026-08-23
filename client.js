@@ -1849,6 +1849,13 @@ window.__ModuleLoader__.load({
         getPermissions: (packageName, serial) => connection.rpc.call(CHANNEL, 'getPermissions', { packageName, serial }).then(unwrap),
         getActivities: (packageName, serial) => connection.rpc.call(CHANNEL, 'getActivities', { packageName, serial }).then(unwrap),
         getServices: (packageName, serial) => connection.rpc.call(CHANNEL, 'getServices', { packageName, serial }).then(unwrap),
+        // v1.2: UI Tree & Semantic Control
+        getUiTree: (serial, compact) => connection.rpc.call(CHANNEL, 'getUiTree', { serial, compact }).then(unwrap),
+        tapElement: (selector, serial) => connection.rpc.call(CHANNEL, 'tapElement', { selector, serial }).then(unwrap),
+        waitForElement: (selector, timeout, serial) => connection.rpc.call(CHANNEL, 'waitForElement', { selector, timeout, serial }).then(unwrap),
+        scrollToElement: (selector, maxSwipes, serial) => connection.rpc.call(CHANNEL, 'scrollToElement', { selector, maxSwipes, serial }).then(unwrap),
+        longPress: (x, y, duration, serial) => connection.rpc.call(CHANNEL, 'longPress', { x, y, duration, serial }).then(unwrap),
+        launchApp: (package, activity, serial) => connection.rpc.call(CHANNEL, 'launchApp', { package, activity, serial }).then(unwrap),
       }
       
       slots.inject('conversation.view', () => slots.register(
