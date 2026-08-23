@@ -682,6 +682,78 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         return { ok: true, value: { success: true } };
       }
 
+      // v2.0: Streaming RPC
+      case 'screenCapture': {
+        const serial = payload.serial || cfg?.defaultSerial;
+        if (!serial) {
+          return { ok: false, error: { code: 'param', message: '需要指定设备 serial' } };
+        }
+        try {
+          await runAdb(['shell', 'screencap', '-p', '/sdcard/snapshot.png'], cfg, { serial });
+          const localPath = `/tmp/snapshot_${serial.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+          await runAdb(['pull', '/sdcard/snapshot.png', localPath], cfg, { serial });
+          await runAdb(['shell', 'rm', '/sdcard/snapshot.png'], cfg, { serial }).catch(() => {});
+          const fs = await import('fs');
+          const buffer = fs.readFileSync(localPath);
+          const frame = buffer.toString('base64');
+          fs.unlinkSync(localPath);
+          const wmResult = await runAdb(['shell', 'wm', 'size'], cfg, { serial });
+          const match = wmResult.stdout.match(/(\d+)x(\d+)/);
+          const width = match ? parseInt(match[1]) : 0;
+          const height = match ? parseInt(match[2]) : 0;
+          return { ok: true, value: { frame, width, height, timestamp: Date.now() } };
+        } catch (e: any) {
+          return { ok: false, error: { code: 'internal', message: e.message || '截图失败' } };
+        }
+      }
+
+      case 'tapAt': {
+        const { x, y, normalized = false } = payload;
+        const serial = payload.serial || cfg?.defaultSerial;
+        if (!serial) {
+          return { ok: false, error: { code: 'param', message: '需要指定设备 serial' } };
+        }
+        const wmResult = await runAdb(['shell', 'wm', 'size'], cfg, { serial });
+        const match = wmResult.stdout.match(/(\d+)x(\d+)/);
+        const width = match ? parseInt(match[1]) : 1080;
+        const height = match ? parseInt(match[2]) : 1920;
+        const deviceX = normalized ? Math.round(x * width) : Math.round(x);
+        const deviceY = normalized ? Math.round(y * height) : Math.round(y);
+        await runAdb(['shell', 'input', 'tap', String(deviceX), String(deviceY)], cfg, { serial });
+        return { ok: true, value: { success: true, deviceX, deviceY } };
+      }
+
+      case 'swipeAt': {
+        const { x1, y1, x2, y2, duration = 300, normalized = false } = payload;
+        const serial = payload.serial || cfg?.defaultSerial;
+        if (!serial) {
+          return { ok: false, error: { code: 'param', message: '需要指定设备 serial' } };
+        }
+        const wmResult = await runAdb(['shell', 'wm', 'size'], cfg, { serial });
+        const match = wmResult.stdout.match(/(\d+)x(\d+)/);
+        const width = match ? parseInt(match[1]) : 1080;
+        const height = match ? parseInt(match[2]) : 1920;
+        const dx1 = normalized ? Math.round(x1 * width) : Math.round(x1);
+        const dy1 = normalized ? Math.round(y1 * height) : Math.round(y1);
+        const dx2 = normalized ? Math.round(x2 * width) : Math.round(x2);
+        const dy2 = normalized ? Math.round(y2 * height) : Math.round(y2);
+        await runAdb(['shell', 'input', 'swipe', String(dx1), String(dy1), String(dx2), String(dy2), String(duration)], cfg, { serial });
+        return { ok: true, value: { success: true } };
+      }
+
+      case 'screenSize': {
+        const serial = payload.serial || cfg?.defaultSerial;
+        if (!serial) {
+          return { ok: false, error: { code: 'param', message: '需要指定设备 serial' } };
+        }
+        const result = await runAdb(['shell', 'wm', 'size'], cfg, { serial });
+        const match = result.stdout.match(/(\d+)x(\d+)/);
+        if (!match) {
+          return { ok: false, error: { code: 'internal', message: '无法获取屏幕分辨率' } };
+        }
+        return { ok: true, value: { width: parseInt(match[1]), height: parseInt(match[2]) } };
+      }
+
       default:
         throw new Error(`unknown endpoint: ${endpoint}`);
     }
@@ -1490,6 +1562,236 @@ export function apply(ctx: any, config: any) {
       }
       
       return { ok: true, value: { found: false, swipes: maxSwipes } };
+    },
+  });
+
+  // ============================================================
+  // v2.0: 实时屏幕快照服务（轮询模式）
+  // ============================================================
+
+  // 屏幕快照缓存
+  interface ScreenSnapshot {
+    frame: string; // base64 编码的 PNG
+    width: number;
+    height: number;
+    timestamp: number;
+  }
+
+  const screenSnapshots = new Map<string, ScreenSnapshot>();
+
+  // 获取设备屏幕分辨率
+  async function getDeviceScreenSize(serial: string): Promise<{ width: number; height: number }> {
+    const result = await runAdb(['shell', 'wm', 'size'], {}, { serial });
+    const match = result.stdout.match(/(\d+)x(\d+)/);
+    if (match) {
+      return { width: parseInt(match[1]), height: parseInt(match[2]) };
+    }
+    return { width: 1080, height: 1920 };
+  }
+
+  // 捕获屏幕快照
+  async function captureScreenSnapshot(serial: string): Promise<ScreenSnapshot | null> {
+    try {
+      const { width, height } = await getDeviceScreenSize(serial);
+
+      // 截图到设备临时文件
+      await runAdb(['shell', 'screencap', '-p', '/sdcard/snapshot.png'], {}, { serial });
+
+      // 拉取到本地
+      const localPath = `/tmp/snapshot_${serial.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+      await runAdb(['pull', '/sdcard/snapshot.png', localPath], {}, { serial });
+
+      // 删除设备上的临时文件
+      await runAdb(['shell', 'rm', '/sdcard/snapshot.png'], {}, { serial }).catch(() => {});
+
+      // 读取并转为 base64
+      const fs = await import('fs');
+      const buffer = fs.readFileSync(localPath);
+      const frame = buffer.toString('base64');
+      fs.unlinkSync(localPath);
+
+      return {
+        frame,
+        width,
+        height,
+        timestamp: Date.now(),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 注册流媒体工具
+  ctx.tools.register({
+    name: 'adb_screen_capture',
+    description: 'Capture current screen as base64 PNG (for streaming)',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        frame: { type: 'string', description: 'Base64 encoded PNG' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        timestamp: { type: 'number' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      if (!serial) {
+        return { ok: false, error: '需要指定设备 serial' };
+      }
+      const snapshot = await captureScreenSnapshot(serial);
+      if (!snapshot) {
+        return { ok: false, error: '截图失败' };
+      }
+      // 缓存快照
+      screenSnapshots.set(serial, snapshot);
+      return { ok: true, value: snapshot };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_screen_stream_start',
+    description: 'Start screen streaming session',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      if (!serial) {
+        return { ok: false, error: '需要指定设备 serial' };
+      }
+      const { width, height } = await getDeviceScreenSize(serial);
+      const sessionId = `stream_${serial}_${Date.now()}`;
+      return { 
+        ok: true, 
+        value: { 
+          sessionId,
+          width,
+          height,
+        } 
+      };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_tap_at',
+    description: 'Tap at screen coordinates (with coordinate transformation for streaming)',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['x', 'y'],
+      properties: {
+        x: { type: 'number', description: 'X coordinate (0-1 normalized, or absolute)' },
+        y: { type: 'number', description: 'Y coordinate (0-1 normalized, or absolute)' },
+        normalized: { type: 'boolean', description: 'If true, x/y are 0-1 normalized', default: false },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        deviceX: { type: 'number' },
+        deviceY: { type: 'number' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      if (!serial) {
+        return { ok: false, error: '需要指定设备 serial' };
+      }
+
+      const { width, height } = await getDeviceScreenSize(serial);
+      let deviceX: number, deviceY: number;
+
+      if (args.normalized) {
+        // 归一化坐标 (0-1) 转换为绝对坐标
+        deviceX = Math.round(args.x * width);
+        deviceY = Math.round(args.y * height);
+      } else {
+        deviceX = Math.round(args.x);
+        deviceY = Math.round(args.y);
+      }
+
+      await runAdb(['shell', 'input', 'tap', String(deviceX), String(deviceY)], {}, { serial });
+
+      return { 
+        ok: true, 
+        value: { 
+          success: true,
+          deviceX,
+          deviceY,
+        } 
+      };
+    },
+  });
+
+  ctx.tools.register({
+    name: 'adb_swipe_at',
+    description: 'Swipe on screen',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['x1', 'y1', 'x2', 'y2'],
+      properties: {
+        x1: { type: 'number', description: 'Start X' },
+        y1: { type: 'number', description: 'Start Y' },
+        x2: { type: 'number', description: 'End X' },
+        y2: { type: 'number', description: 'End Y' },
+        duration: { type: 'number', description: 'Duration in ms', default: 300 },
+        normalized: { type: 'boolean', description: 'If true, coordinates are 0-1 normalized', default: false },
+        serial: { type: 'string', description: 'Device serial (optional)' },
+      },
+    },
+    output: makeOutput({
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+      },
+    }),
+    async execute(args: any, exec: any) {
+      const serial = args.serial || cfg?.defaultSerial;
+      if (!serial) {
+        return { ok: false, error: '需要指定设备 serial' };
+      }
+
+      const { width, height } = await getDeviceScreenSize(serial);
+      let x1: number, y1: number, x2: number, y2: number;
+
+      if (args.normalized) {
+        x1 = Math.round(args.x1 * width);
+        y1 = Math.round(args.y1 * height);
+        x2 = Math.round(args.x2 * width);
+        y2 = Math.round(args.y2 * height);
+      } else {
+        x1 = Math.round(args.x1);
+        y1 = Math.round(args.y1);
+        x2 = Math.round(args.x2);
+        y2 = Math.round(args.y2);
+      }
+
+      await runAdb(['shell', 'input', 'swipe', String(x1), String(y1), String(x2), String(y2), String(args.duration || 300)], {}, { serial });
+
+      return { ok: true, value: { success: true } };
     },
   });
 

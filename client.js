@@ -704,14 +704,42 @@ window.__ModuleLoader__.load({
         if (screenLoading) return // Skip if already loading
         try {
           setScreenLoading(true)
-          const data = await api.screenshotBase64(selected.serial)
+          // Try new screenCapture RPC first, fallback to screenshotBase64
+          let data;
+          try {
+            data = await api.screenCapture(selected.serial)
+          } catch (e) {
+            data = await api.screenshotBase64(selected.serial)
+          }
           if (data.base64) {
             setScreenImage(`data:image/png;base64,${data.base64}`)
+          } else if (data.frame) {
+            setScreenImage(`data:image/png;base64,${data.frame}`)
+            setDeviceResolution(`${data.width}x${data.height}`)
           }
         } catch (e) {
           console.error('Screenshot failed:', e)
         } finally {
           setScreenLoading(false)
+        }
+      }
+      
+      // Handle touch-to-tap on screen image
+      const handleScreenTap = async (e) => {
+        if (!selected || screenPlaying) return
+        const img = e.currentTarget
+        const rect = img.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        // Normalize to 0-1
+        const normalizedX = x / rect.width
+        const normalizedY = y / rect.height
+        try {
+          await api.tapAt(normalizedX, normalizedY, true, selected.serial)
+          // Refresh screen after tap
+          setTimeout(loadScreenshot, 300)
+        } catch (e) {
+          console.error('Tap failed:', e)
         }
       }
       
@@ -1053,7 +1081,7 @@ window.__ModuleLoader__.load({
                   color: COLORS.textSecondary,
                   alignSelf: 'center'
                 } 
-              }, screenPlaying ? '实时刷新中 (1s)' : '已暂停')
+              }, screenPlaying ? '实时刷新中 (1s)' : '点击画面触屏')
             ),
             
             deviceResolution && h('div', { 
@@ -1086,9 +1114,10 @@ window.__ModuleLoader__.load({
                     maxHeight: 580,
                     objectFit: 'contain',
                     borderRadius: 4,
-                    cursor: screenPlaying ? 'default' : 'pointer',
+                    cursor: screenPlaying ? 'default' : 'crosshair',
                   },
-                  onClick: () => !screenPlaying && loadScreenshot(),
+                  onClick: handleScreenTap,
+                  title: screenPlaying ? '' : '点击画面触屏',
                 })
               : h(EmptyState, {
                   icon: '🖥️',
@@ -1856,6 +1885,11 @@ window.__ModuleLoader__.load({
         scrollToElement: (selector, maxSwipes, serial) => connection.rpc.call(CHANNEL, 'scrollToElement', { selector, maxSwipes, serial }).then(unwrap),
         longPress: (x, y, duration, serial) => connection.rpc.call(CHANNEL, 'longPress', { x, y, duration, serial }).then(unwrap),
         launchApp: (package, activity, serial) => connection.rpc.call(CHANNEL, 'launchApp', { package, activity, serial }).then(unwrap),
+        // v2.0: Streaming
+        screenCapture: (serial) => connection.rpc.call(CHANNEL, 'screenCapture', { serial }).then(unwrap),
+        screenSize: (serial) => connection.rpc.call(CHANNEL, 'screenSize', { serial }).then(unwrap),
+        tapAt: (x, y, normalized, serial) => connection.rpc.call(CHANNEL, 'tapAt', { x, y, normalized, serial }).then(unwrap),
+        swipeAt: (x1, y1, x2, y2, duration, normalized, serial) => connection.rpc.call(CHANNEL, 'swipeAt', { x1, y1, x2, y2, duration, normalized, serial }).then(unwrap),
       }
       
       slots.inject('conversation.view', () => slots.register(
