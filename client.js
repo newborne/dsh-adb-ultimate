@@ -510,8 +510,10 @@ window.__ModuleLoader__.load({
       })
       const [connectIP, setConnectIP] = React.useState('')
       const [connectPort, setConnectPort] = React.useState('5555')
+      const [pairPort, setPairPort] = React.useState('')
       const [pairingCode, setPairingCode] = React.useState('')
-      const [isPairMode, setIsPairMode] = React.useState(false)
+      const [successMsg, setSuccessMsg] = React.useState('')
+      const [qrData, setQrData] = React.useState(null)
 
       // ============================================================
       // API CALLS
@@ -528,6 +530,22 @@ window.__ModuleLoader__.load({
         connect: (host, port) => runtime.connect(host, port),
         disconnect: (host, port) => runtime.disconnect(host, port),
         pair: (host, port, code) => runtime.pair(host, port, code),
+        generateQrCode: () => {
+          // 直接在前端生成二维码数据，不依赖后端
+          const generateString = (length) => {
+            const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < length; i++) {
+              result += charset.charAt(Math.floor(Math.random() * charset.length));
+            }
+            return result;
+          };
+          const name = 'ADB_WIFI_' + generateString(14) + '-' + generateString(6);
+          const password = generateString(21);
+          const qrText = 'WIFI:T:ADB;S:' + name + ';P:' + password + ';;';
+          return Promise.resolve({ qrText, name, password });
+        },
+        waitForQrScan: (password) => runtime.waitForQrScan(password),
         install: (apkPath, serial) => runtime.install(apkPath, serial),
         uninstall: (pkg, serial) => runtime.uninstall(pkg, serial),
         forceStop: (pkg, serial) => runtime.forceStop(pkg, serial),
@@ -537,6 +555,25 @@ window.__ModuleLoader__.load({
         getServices: (pkg, serial) => runtime.getServices(pkg, serial),
         reboot: (mode, serial) => runtime.reboot(mode, serial),
         getprop: (prop, serial) => runtime.getprop(prop, serial),
+        // Input controls
+        inputTap: (x, y, serial) => runtime.inputTap(x, y, serial),
+        inputSwipe: (x1, y1, x2, y2, duration, serial) => runtime.inputSwipe(x1, y1, x2, y2, duration, serial),
+        inputText: (text, serial) => runtime.inputText(text, serial),
+        inputKeyevent: (keyCode, serial) => runtime.inputKeyevent(keyCode, serial),
+        // Streaming & Screen
+        screenCapture: (serial) => runtime.screenCapture(serial),
+        screenSize: (serial) => runtime.screenSize(serial),
+        tapAt: (x, y, normalized, serial) => runtime.tapAt(x, y, normalized, serial),
+        swipeAt: (x1, y1, x2, y2, duration, normalized, serial) => runtime.swipeAt(x1, y1, x2, y2, duration, normalized, serial),
+        // UI Tree
+        getUiTree: (serial, compact) => runtime.getUiTree(serial, compact),
+        tapElement: (selector, serial) => runtime.tapElement(selector, serial),
+        waitForElement: (selector, timeout, serial) => runtime.waitForElement(selector, timeout, serial),
+        scrollToElement: (selector, maxSwipes, serial) => runtime.scrollToElement(selector, maxSwipes, serial),
+        // App launch
+        launchApp: (pkg, activity, serial) => runtime.launchApp(pkg, activity, serial),
+        // v2.0 Streaming
+        screenshot: (savePath, serial) => runtime.screenshot(savePath, serial),
       }
 
       // ============================================================
@@ -726,7 +763,10 @@ window.__ModuleLoader__.load({
       
       // Handle touch-to-tap on screen image
       const handleScreenTap = async (e) => {
-        if (!selected || screenPlaying) return
+        if (!selected) {
+          alert('请先选择一个设备')
+          return
+        }
         const img = e.currentTarget
         const rect = img.getBoundingClientRect()
         const x = e.clientX - rect.left
@@ -734,12 +774,46 @@ window.__ModuleLoader__.load({
         // Normalize to 0-1
         const normalizedX = x / rect.width
         const normalizedY = y / rect.height
+        
+        // Get device screen size to calculate actual coordinates
+        let deviceX, deviceY
         try {
-          await api.tapAt(normalizedX, normalizedY, true, selected.serial)
+          const size = await api.screenSize(selected.serial)
+          deviceX = Math.round(normalizedX * size.width)
+          deviceY = Math.round(normalizedY * size.height)
+        } catch (e) {
+          // Fallback: assume 1080x1920
+          deviceX = Math.round(normalizedX * 1080)
+          deviceY = Math.round(normalizedY * 1920)
+        }
+        
+        try {
+          // Pause auto-refresh during tap
+          if (screenPlaying) {
+            clearInterval(screenInterval)
+            setScreenPlaying(false)
+          }
+          await api.inputTap(deviceX, deviceY, selected.serial)
           // Refresh screen after tap
-          setTimeout(loadScreenshot, 300)
+          setTimeout(loadScreenshot, 500)
         } catch (e) {
           console.error('Tap failed:', e)
+          alert('点击失败: ' + e.message)
+        }
+      }
+      
+      // Handle swipe on screen
+      const handleScreenSwipe = async (startX, startY, endX, endY) => {
+        if (!selected) return
+        try {
+          if (screenPlaying) {
+            clearInterval(screenInterval)
+            setScreenPlaying(false)
+          }
+          await api.inputSwipe(startX, startY, endX, endY, 300, selected.serial)
+          setTimeout(loadScreenshot, 500)
+        } catch (e) {
+          console.error('Swipe failed:', e)
         }
       }
       
@@ -813,27 +887,54 @@ window.__ModuleLoader__.load({
       const handleConnect = () => {
         if (!connectIP) return
         setBusy(true)
+        setError('')
+        setSuccessMsg('')
         
-        const promise = isPairMode && pairingCode
-          ? api.pair(connectIP, parseInt(connectPort) || 5555, pairingCode)
-          : api.connect(connectIP, parseInt(connectPort) || 5555)
+        const ip = connectIP.trim()
+        const port = connectPort || '5555'
         
-        promise
-          .then(async () => {
-            addToHistory(connectIP, connectPort)
-            await loadDevices()
-            // Auto-select first device if none selected
-            const data = await api.listDevices()
-            const newDevices = data.devices || []
-            if (!selected && newDevices.length > 0) {
-              setSelected(newDevices[0])
-            }
-            setConnectIP('')
-            setPairingCode('')
-            setIsPairMode(false)
+        api.connect(ip, parseInt(port) || 5555)
+          .then(() => {
+            setSuccessMsg(`连接 ${ip}:${port} 成功！`)
+            setError('')
+            loadDevices()
+            setBusy(false)
           })
-          .catch(e => setError(e.message))
-          .finally(() => setBusy(false))
+          .catch(e => {
+            setError('连接失败: ' + e.message)
+            setBusy(false)
+          })
+      }
+      
+      const handlePair = () => {
+        if (!connectIP || !pairingCode) return
+        setBusy(true)
+        setError('')
+        setSuccessMsg('')
+        
+        const ip = connectIP.trim()
+        const port = pairPort || '5555'
+        const code = pairingCode
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('配对请求超时(35秒)，后端无响应')), 35000)
+        )
+        
+        Promise.race([
+          api.pair(ip, parseInt(port) || 5555, code),
+          timeoutPromise
+        ])
+          .then(data => {
+            setSuccessMsg('配对成功！请在手机上查看新的"连接端口"，然后在右侧"连接设备"中输入。')
+            setError('')
+            setPairingCode('')
+            setBusy(false)
+          })
+          .catch(e => {
+            setError('配对失败: ' + e.message)
+            setSuccessMsg('')
+            setBusy(false)
+          })
       }
       
       const handleDisconnect = async (device) => {
@@ -906,10 +1007,10 @@ window.__ModuleLoader__.load({
         localStorage.setItem('dsh-adb-ultimate-history', JSON.stringify(newHistory.slice(0, 10)))
       }
       
-      const addToHistory = (ip, port) => {
+      const addToHistory = (ip, port, model = '') => {
         const key = `${ip}:${port}`
         const newHistory = history.filter(h => h.key !== key)
-        newHistory.unshift({ key, ip, port, time: Date.now() })
+        newHistory.unshift({ key, ip, port, model, time: Date.now() })
         saveHistory(newHistory)
       }
       
@@ -1124,6 +1225,33 @@ window.__ModuleLoader__.load({
                   title: '无屏幕数据',
                   description: '点击"播放"开始实时监控，或点击"刷新"获取当前屏幕',
                 })
+          ),
+          
+          // Quick Actions - 快捷操作
+          h('div', { style: { ...styles.card, marginTop: 12 } },
+            h('div', { style: { ...styles.cardHeader } },
+              h('span', { style: styles.cardTitle }, '🎮 快捷操作')
+            ),
+            h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 } },
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => api.inputKeyevent(3, selected?.serial) }, '🏠 Home'),
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => api.inputKeyevent(4, selected?.serial) }, '⬅️ 返回'),
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => api.inputKeyevent(26, selected?.serial) }, '🔌 电源'),
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => api.inputKeyevent(187, selected?.serial) }, '📱 任务'),
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => api.inputKeyevent(24, selected?.serial) }, '🔊 音量+'),
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => api.inputKeyevent(25, selected?.serial) }, '🔉 音量-'),
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => api.screenshotBase64(selected?.serial).then(() => loadScreenshot()) }, '📷 截图'),
+              h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => loadScreenshot() }, '🔄 刷新')
+            )
+          ),
+          
+          // Coordinate Display
+          h('div', { style: { ...styles.card, marginTop: 12 } },
+            h('div', { style: { ...styles.cardHeader } },
+              h('span', { style: styles.cardTitle }, '📍 触摸坐标')
+            ),
+            h('div', { style: { fontSize: 12, color: COLORS.textSecondary } },
+              '点击上方画面即可触屏操作，当前设备分辨率：', deviceResolution || '未知'
+            )
           )
         )
       }
@@ -1688,107 +1816,246 @@ window.__ModuleLoader__.load({
         error && !error.includes('ADB未安装') && h('div', { 
           style: { 
             ...styles.card,
-            background: COLORS.errorBg,
-            border: `1px solid ${COLORS.error}30`,
-            color: COLORS.error,
+            background: '#2a0a0a',
+            border: '2px solid #ff3333',
+            color: '#ff6666',
+            padding: 16,
+            fontSize: 14,
+            fontFamily: 'monospace',
           } 
-        }, error),
+        }, 
+          h('div', { style: { fontWeight: 'bold', marginBottom: 8, fontSize: 16 } }, '❌ 错误'),
+          h('div', { style: { marginBottom: 4 } }, new Date().toLocaleTimeString()),
+          h('div', { style: { wordBreak: 'break-all' } }, error)
+        ),
         
-        // Connection Card
-        h('div', { style: { ...styles.card, background: COLORS.accentSoft } },
-          h('div', { style: { ...styles.label, marginBottom: 12 } }, '➕ 连接新设备'),
-          h('div', { style: { ...styles.row, gap: 8 } },
-            h('input', {
-              style: { ...styles.input, flex: 1 },
-              placeholder: 'IP 地址',
-              value: connectIP,
-              onChange: e => setConnectIP(e.target.value),
-              onKeyPress: e => e.key === 'Enter' && handleConnect()
-            }),
-            h('input', {
-              style: { ...styles.input, width: 80 },
-              placeholder: '端口',
-              value: connectPort,
-              onChange: e => setConnectPort(e.target.value),
-            }),
+        successMsg && h('div', { 
+          style: { 
+            ...styles.card,
+            background: '#0a2a1a',
+            border: '2px solid #33ff77',
+            color: '#66ffaa',
+            padding: 16,
+            fontSize: 14,
+            fontFamily: 'monospace',
+          } 
+        }, 
+          h('div', { style: { fontWeight: 'bold', marginBottom: 8, fontSize: 16 } }, '✅ 成功'),
+          h('div', { style: { wordBreak: 'break-all' } }, successMsg)
+        ),
+        
+        // 配对 + 连接 并排布局
+        h('div', { style: { display: 'flex', gap: 12, marginBottom: 12 } },
+          // 配对卡片
+          h('div', { style: { ...styles.card, background: COLORS.accentSoft, flex: 1 } },
+            h('div', { style: { ...styles.cardHeader, marginBottom: 10 } },
+              h('span', { style: { fontSize: 13, fontWeight: 600 } }, '🔗 配对新设备'),
+              h('div', { style: { fontSize: 10, color: COLORS.textSecondary } }, '首次使用，需要配对码')
+            ),
+            h('div', { style: { display: 'flex', gap: 6, marginBottom: 6 } },
+              h('input', {
+                style: { ...styles.input, flex: 1 },
+                placeholder: 'IP',
+                value: connectIP,
+                onChange: e => setConnectIP(e.target.value),
+              }),
+              h('input', {
+                style: { ...styles.input, width: 70 },
+                placeholder: '配对端口',
+                value: pairPort,
+                onChange: e => setPairPort(e.target.value),
+              }),
+            ),
+            h('div', { style: { marginBottom: 6 } },
+              h('input', {
+                style: { ...styles.input, width: '100%' },
+                placeholder: '配对码',
+                value: pairingCode,
+                onChange: e => setPairingCode(e.target.value),
+              }),
+            ),
             h('button', {
               ...styles.btn,
               ...styles.btnSuccess,
+              style: { width: '100%' },
+              onClick: handlePair,
+              disabled: busy || !connectIP || !pairingCode,
+            }, '🔗 配对')
+          ),
+          
+          // 连接卡片
+          h('div', { style: { ...styles.card, flex: 1 } },
+            h('div', { style: { ...styles.cardHeader, marginBottom: 10 } },
+              h('span', { style: { fontSize: 13, fontWeight: 600 } }, '🔌 连接设备'),
+              h('div', { style: { fontSize: 10, color: COLORS.textSecondary } }, '配对成功后使用')
+            ),
+            h('div', { style: { display: 'flex', gap: 6, marginBottom: 6 } },
+              h('input', {
+                style: { ...styles.input, flex: 1 },
+                placeholder: 'IP',
+                value: connectIP,
+                onChange: e => setConnectIP(e.target.value),
+              }),
+              h('input', {
+                style: { ...styles.input, width: 70 },
+                placeholder: '连接端口',
+                value: connectPort,
+                onChange: e => setConnectPort(e.target.value),
+              }),
+            ),
+            h('button', {
+              ...styles.btn,
+              ...styles.btnSuccess,
+              style: { width: '100%' },
               onClick: handleConnect,
               disabled: busy || !connectIP,
-            }, isPairMode ? '🔗 配对' : '🔌 连接')
+            }, '🔌 连接')
+          )
+        ),
+        
+        // 历史记录（独立一行）
+        history.length > 0 && h('div', { style: { ...styles.card, marginBottom: 12 } },
+          h('div', { style: { ...styles.cardHeader, marginBottom: 8 } },
+            h('span', { style: { fontSize: 12, fontWeight: 600 } }, '📜 快速重连')
           ),
-          
-          isPairMode && h('div', { style: { ...styles.row, gap: 8, marginTop: 8 } },
-            h('input', {
-              style: { ...styles.input, flex: 1 },
-              placeholder: '配对码',
-              value: pairingCode,
-              onChange: e => setPairingCode(e.target.value),
-            }),
-            h('button', { ...styles.btn, ...styles.btnGhost, onClick: () => { setIsPairMode(false); setPairingCode('') } }, '取消')
-          ),
-          
-          !isPairMode && h('button', {
-            ...styles.btn,
-            ...styles.btnGhost,
-            style: { marginTop: 8, fontSize: 11 },
-            onClick: () => setIsPairMode(true)
-          }, '首次连接？使用配对码'),
-          
-          // History
-          history.length > 0 && h('div', { style: { marginTop: 12, paddingTop: 12, borderTop: `1px solid ${COLORS.border}` } },
-            h('div', { style: { ...styles.label, marginBottom: 8 } }, '📜 历史记录'),
-            h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
-              history.map(item =>
-                h('div', {
-                  key: item.key,
-                  style: {
-                    ...styles.row,
-                    gap: 4,
-                    padding: '4px 8px',
-                    background: COLORS.bg,
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    fontSize: 11,
-                  },
-                  onClick: async () => {
-                    setBusy(true)
-                    try {
-                      await api.connect(item.ip, parseInt(item.port) || 5555)
-                      await loadDevices()
-                      const data = await api.listDevices()
-                      const newDevices = data.devices || []
-                      if (!selected && newDevices.length > 0) {
-                        setSelected(newDevices[0])
-                      }
-                    } catch (e) {
-                      alert('连接失败: ' + e.message)
-                    } finally {
-                      setBusy(false)
-                    }
-                  }
+          h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+            history.map(item =>
+              h('div', {
+                key: item.key,
+                style: {
+                  ...styles.row,
+                  gap: 4,
+                  padding: '4px 8px',
+                  background: COLORS.bg,
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 11,
                 },
-                  h('span', null, `${item.ip}:${item.port}`),
-                  h('button', {
-                    style: { 
-                      padding: 0, 
-                      background: 'none', 
-                      border: 'none', 
-                      color: COLORS.error,
-                      cursor: 'pointer',
-                      fontSize: 10,
-                    },
-                    onClick: (e) => deleteHistory(e, item.key)
-                  }, '✕')
-                )
+                onClick: async () => {
+                  setBusy(true)
+                  try {
+                    await api.connect(item.ip, parseInt(item.port) || 5555)
+                    await loadDevices()
+                    const data = await api.listDevices()
+                    const newDevices = data.devices || []
+                    if (!selected && newDevices.length > 0) {
+                      setSelected(newDevices[0])
+                    }
+                  } catch (e) {
+                    setError('重连失败: ' + e.message)
+                  } finally {
+                    setBusy(false)
+                  }
+                }
+              },
+                h('span', null, `${item.ip}:${item.port}`),
+                h('button', {
+                  style: { 
+                    padding: 0, 
+                    background: 'none', 
+                    border: 'none', 
+                    color: COLORS.error,
+                    cursor: 'pointer',
+                    fontSize: 10,
+                  },
+                  onClick: (e) => deleteHistory(e, item.key)
+                }, '✕')
               )
             )
           )
         ),
         
+        // QR Code Modal
+        qrData && h('div', {
+          style: {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          },
+          onClick: () => { setQrData(null); setBusy(false) }
+        },
+          h('div', {
+            style: {
+              background: COLORS.card,
+              borderRadius: 16,
+              padding: 32,
+              textAlign: 'center',
+              maxWidth: 400,
+            },
+            onClick: e => e.stopPropagation()
+          },
+            h('div', { style: { fontSize: 18, fontWeight: 600, marginBottom: 16 } }, '📷 二维码配对'),
+            h('div', { style: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 } },
+              '复制下面的内容，打开浏览器访问生成二维码'
+            ),
+            // 显示二维码内容
+            h('div', {
+              style: {
+                background: COLORS.bg,
+                padding: 12,
+                borderRadius: 8,
+                fontFamily: 'monospace',
+                fontSize: 12,
+                wordBreak: 'break-all',
+                marginBottom: 16,
+                cursor: 'pointer',
+              },
+              onClick: () => navigator.clipboard?.writeText(qrData.qrText),
+              title: '点击复制'
+            }, qrData.qrText),
+            h('div', { style: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 16 } }, '点击上方内容复制'),
+            // 显示二维码图片链接
+            h('a', {
+              href: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData.qrText)}`,
+              target: '_blank',
+              style: { fontSize: 13, color: COLORS.accent }
+            }, '在浏览器中打开二维码'),
+            busy && h('div', { style: { fontSize: 13, color: COLORS.textSecondary, marginTop: 16 } }, '等待扫描中...'),
+            h('button', {
+              ...styles.btn,
+              style: { marginTop: 12 },
+              onClick: async () => {
+                setBusy(true)
+                try {
+                  const result = await api.waitForQrScan(qrData.password)
+                  if (result.ok) {
+                    setQrData(null)
+                    await loadDevices()
+                    const data = await api.listDevices()
+                    const newDevices = data.devices || []
+                    if (!selected && newDevices.length > 0) {
+                      setSelected(newDevices[0])
+                    }
+                  } else {
+                    setError(result.error || '配对失败')
+                  }
+                } catch (e) {
+                  setError(e.message)
+                } finally {
+                  setBusy(false)
+                }
+              }
+            }, busy ? '配对中...' : '开始监听配对'),
+            h('button', {
+              ...styles.btn,
+              ...styles.btnGhost,
+              style: { marginTop: 8 },
+              onClick: () => { setQrData(null); setBusy(false) }
+            }, '取消')
+          )
+        ),
+        
         // Device List
-        h('div', { style: { ...styles.label, marginBottom: 8 } }, `已连接设备 (${devices.length})`),
+        h('div', { style: { ...styles.label, marginBottom: 8 } }, `已连接设备 (${devices.length})`, 
+          devices.length > 1 && h('span', { style: { marginLeft: 8, fontSize: 12 } }, '点击切换')
+        ),
         devices.length === 0
           ? h('div', { style: { ...styles.card, textAlign: 'center', padding: 32, color: COLORS.textSecondary } }, '暂无设备')
           : devices.map(d => h(DeviceCard, { key: d.serial, device: d, selected, onSelect: setSelected, onDisconnect: handleDisconnect })),
@@ -1848,6 +2115,8 @@ window.__ModuleLoader__.load({
         connect: (host, port) => connection.rpc.call(CHANNEL, 'connect', { host, port }).then(unwrap),
         disconnect: (host, port) => connection.rpc.call(CHANNEL, 'disconnect', { host, port }).then(unwrap),
         pair: (host, port, code) => connection.rpc.call(CHANNEL, 'pair', { host, port, pairingCode: code }).then(unwrap),
+        generateQrCode: () => connection.rpc.call(CHANNEL, 'generateQrCode', {}).then(unwrap),
+        waitForQrScan: (password) => connection.rpc.call(CHANNEL, 'waitForQrScan', { password }).then(unwrap),
         getDeviceInfo: (serial) => connection.rpc.call(CHANNEL, 'getDeviceInfo', { serial }).then(unwrap),
         screenshot: (savePath, serial) => connection.rpc.call(CHANNEL, 'screenshot', { savePath, serial }).then(unwrap),
         screenshotBase64: (serial) => connection.rpc.call(CHANNEL, 'screenshotBase64', { serial }).then(unwrap),
@@ -1884,7 +2153,7 @@ window.__ModuleLoader__.load({
         waitForElement: (selector, timeout, serial) => connection.rpc.call(CHANNEL, 'waitForElement', { selector, timeout, serial }).then(unwrap),
         scrollToElement: (selector, maxSwipes, serial) => connection.rpc.call(CHANNEL, 'scrollToElement', { selector, maxSwipes, serial }).then(unwrap),
         longPress: (x, y, duration, serial) => connection.rpc.call(CHANNEL, 'longPress', { x, y, duration, serial }).then(unwrap),
-        launchApp: (package, activity, serial) => connection.rpc.call(CHANNEL, 'launchApp', { package, activity, serial }).then(unwrap),
+        launchApp: (pkg, activity, serial) => connection.rpc.call(CHANNEL, 'launchApp', { package: pkg, activity, serial }).then(unwrap),
         // v2.0: Streaming
         screenCapture: (serial) => connection.rpc.call(CHANNEL, 'screenCapture', { serial }).then(unwrap),
         screenSize: (serial) => connection.rpc.call(CHANNEL, 'screenSize', { serial }).then(unwrap),

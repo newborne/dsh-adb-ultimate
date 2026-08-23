@@ -50,6 +50,8 @@
     "pack": "npm pack --dry-run"
   },
   "dependencies": {
+    "adb-qr": "^1.0.0",
+    "qrcode": "^1.5.4",
     "schemastery": "^3.13.1"
   },
   "devDependencies": {

@@ -297,13 +297,83 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const host = payload.host;
         const port = payload.port || 5555;
         const pairingCode = payload.pairingCode;
+        const { appendFileSync } = await import('fs');
+        appendFileSync('/tmp/dsh-adb-pair.log', `[${new Date().toISOString()}] pair called: host=${host}, port=${port}, code=${pairingCode}\n`);
         if (!pairingCode) {
           throw new Error('pairingCode 是必填的');
         }
         const target = `${host}:${port}`;
-        const result = await runAdb(['pair', target], cfg);
-        if (result.exitCode !== 0) throw new Error(result.stderr || '配对失败，请检查 IP、端口和配对码是否正确');
-        return { ok: true, value: { target, paired: true, output: result.stdout } };
+        const cmd = `${getAdbPath()} pair ${target} ${pairingCode}`;
+        appendFileSync('/tmp/dsh-adb-pair.log', `[${new Date().toISOString()}] exec cmd: ${cmd}\n`);
+        try {
+          const { stdout, stderr } = await execAsync(cmd, { timeout: 30000 });
+          appendFileSync('/tmp/dsh-adb-pair.log', `[${new Date().toISOString()}] exec done: stdout=${stdout}, stderr=${stderr}\n`);
+          const combinedOutput = (stdout + stderr).toLowerCase();
+          if (!combinedOutput.includes('success')) {
+            throw new Error(stderr || stdout || '配对失败');
+          }
+          appendFileSync('/tmp/dsh-adb-pair.log', `[${new Date().toISOString()}] pair SUCCESS\n`);
+          return { 
+            ok: true, 
+            value: { 
+              target, 
+              paired: true, 
+              message: `配对成功！`
+            } 
+          };
+        } catch (error: any) {
+          appendFileSync('/tmp/dsh-adb-pair.log', `[${new Date().toISOString()}] pair ERROR: ${error.message}\n`);
+          throw new Error(error.message || '配对失败，请检查 IP、端口和配对码是否正确');
+        }
+      }
+
+      case 'generateQrCode': {
+        // 生成二维码配对信息
+        const generateString = (length: number) => {
+          const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          let result = '';
+          for (let i = 0; i < length; i++) {
+            result += charset.charAt(Math.floor(Math.random() * charset.length));
+          }
+          return result;
+        };
+        const name = `ADB_WIFI_${generateString(14)}-${generateString(6)}`;
+        const password = generateString(21);
+        const qrText = `WIFI:T:ADB;S:${name};P:${password};;`;
+        ctx.logger.info(`[dsh-adb-ultimate] Generated QR code for pairing`);
+        return { ok: true, value: { qrText, name, password } };
+      }
+
+      case 'waitForQrScan': {
+        // 等待二维码被扫描，然后自动配对
+        const password = payload.password;
+        ctx.logger.info(`[dsh-adb-ultimate] Waiting for QR scan...`);
+        // 等待设备通过 mDNS 广播
+        for (let attempt = 1; attempt <= 30; attempt++) {
+          try {
+            const mdnsResult = await execAsync(`${getAdbPath()} mdns services`, { timeout: 5000 });
+            const lines = mdnsResult.stdout.trim().split('\n');
+            const match = lines.find((line: string) => line.includes('_adb-tls-pairing._tcp'));
+            if (match) {
+              const parts = match.trim().split(/\s+/);
+              const addressPort = parts.find((p: string) => p.includes(':') && !p.includes('_adb'));
+              if (addressPort) {
+                const sepIndex = addressPort.lastIndexOf(':');
+                const ip = addressPort.substring(0, sepIndex);
+                const pairPort = addressPort.substring(sepIndex + 1);
+                ctx.logger.info(`[dsh-adb-ultimate] Found device: ${ip}:${pairPort}`);
+                // 配对
+                const pairResult = await execAsync(`${getAdbPath()} pair ${ip}:${pairPort} ${password}`, { timeout: 15000 });
+                ctx.logger.info(`[dsh-adb-ultimate] Pair result: ${pairResult.stdout}`);
+                return { ok: true, value: { paired: true, output: pairResult.stdout } };
+              }
+            }
+          } catch (e: any) {
+            ctx.logger.info(`[dsh-adb-ultimate] mDNS attempt ${attempt}: ${e.message}`);
+          }
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        return { ok: false, error: '等待扫描超时，请确保手机在同一个局域网且已打开"使用二维码配对设备"' };
       }
 
       case 'disconnect': {
