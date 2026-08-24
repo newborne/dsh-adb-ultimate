@@ -22,18 +22,20 @@ window.__ModuleLoader__.load({
     // CONSTANTS & STYLES
     // ============================================================
     
+    // Use CSS variables directly - browser resolves them at paint time
+    // This ensures theme changes are reflected automatically
     const COLORS = {
-      // Dark theme palette
-      bg: 'var(--dsh-bg, #1a1a2e)',
-      bgSecondary: 'var(--dsh-bg-secondary, #16213e)',
-      bgTertiary: 'var(--dsh-bg-tertiary, #0f3460)',
+      // Theme-aware - CSS variables with fallbacks
+      bg: 'var(--dsh-bg, #f8fafc)',
+      bgSecondary: 'var(--dsh-bg-secondary, #f1f5f9)',
+      bgTertiary: 'var(--dsh-bg-tertiary, #e2e8f0)',
       accent: 'var(--dsh-accent, #4285f4)',
       accentSoft: 'var(--dsh-accent-soft, rgba(66,133,244,0.15))',
-      text: 'var(--dsh-text, #e4e4e7)',
-      textSecondary: 'var(--dsh-text-secondary, #a1a1aa)',
-      border: 'var(--dsh-border, #2a2a3e)',
+      text: 'var(--dsh-text, #1e293b)',
+      textSecondary: 'var(--dsh-text-secondary, #64748b)',
+      border: 'var(--dsh-border, #e2e8f0)',
       
-      // Status colors
+      // Status colors (same for both themes)
       success: '#22c55e',
       successBg: 'rgba(34,197,94,0.15)',
       warning: '#f59e0b',
@@ -43,7 +45,7 @@ window.__ModuleLoader__.load({
       info: '#3b82f6',
       infoBg: 'rgba(59,130,246,0.15)',
       
-      // Log level colors
+      // Log level colors (same for both themes)
       logVerbose: '#9ca3af',
       logDebug: '#60a5fa',
       logInfo: '#22c55e',
@@ -128,37 +130,56 @@ window.__ModuleLoader__.load({
         gap: 8,
       },
       btn: {
-        padding: '8px 16px',
+        padding: '6px 14px',
         borderRadius: 8,
-        border: 'none',
+        border: '1px solid #3b82f6',
         cursor: 'pointer',
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: 500,
         display: 'inline-flex',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 6,
-        transition: 'all 0.2s',
+        transition: 'all 0.15s ease',
+        fontFamily: 'inherit',
+        background: '#3b82f6',
+        color: '#ffffff',
       },
       btnPrimary: {
-        background: COLORS.accent,
-        color: '#fff',
+        background: '#3b82f6',
+        color: '#ffffff',
+        border: 'none',
+        fontWeight: 600,
+        padding: '6px 16px',
+        borderRadius: 8,
       },
       btnSuccess: {
-        background: COLORS.success,
-        color: '#fff',
+        background: '#3b82f6',
+        color: '#ffffff',
+        border: 'none',
+        padding: '6px 16px',
+        borderRadius: 8,
       },
       btnDanger: {
-        background: COLORS.error,
-        color: '#fff',
+        background: '#ef4444',
+        color: '#ffffff',
+        border: 'none',
+        padding: '6px 16px',
+        borderRadius: 8,
       },
       btnWarning: {
-        background: COLORS.warning,
-        color: '#000',
+        background: '#f59e0b',
+        color: '#000000',
+        border: 'none',
+        padding: '6px 16px',
+        borderRadius: 8,
       },
       btnGhost: {
         background: 'transparent',
-        color: COLORS.textSecondary,
-        border: `1px solid ${COLORS.border}`,
+        color: '#3b82f6',
+        border: '1px solid #3b82f6',
+        padding: '6px 14px',
+        borderRadius: 8,
       },
       btnSmall: {
         padding: '4px 10px',
@@ -166,14 +187,16 @@ window.__ModuleLoader__.load({
         borderRadius: 6,
       },
       input: {
-        padding: '8px 12px',
-        borderRadius: 8,
+        padding: '6px 10px',
+        borderRadius: 6,
         border: `1px solid ${COLORS.border}`,
         background: COLORS.bg,
         color: COLORS.text,
-        fontSize: 13,
+        fontSize: 12,
         outline: 'none',
         transition: 'border-color 0.2s',
+        boxSizing: 'border-box',
+        width: '100%',
       },
       select: {
         padding: '8px 12px',
@@ -1784,11 +1807,23 @@ window.__ModuleLoader__.load({
         h('div', { style: styles.header },
           h('h2', { style: styles.title }, '📱 ADB Ultimate'),
           h('button', {
-            ...styles.btn,
-            ...styles.btnPrimary,
+            style: {
+              padding: '6px 16px',
+              borderRadius: 8,
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              background: '#3b82f6',
+              color: '#ffffff',
+            },
             onClick: loadDevices,
             disabled: busy,
-          }, busy ? h(Spinner, { size: 16 }) : '🔄 刷新设备')
+          }, busy ? h(Spinner, { size: 16, color: '#ffffff' }) : '🔄 刷新设备')
         ),
         
         // Error Messages
@@ -1860,20 +1895,20 @@ window.__ModuleLoader__.load({
         h('div', { style: { display: 'flex', gap: 12, marginBottom: 12 } },
           // 配对卡片
           h('div', { style: { ...styles.card, background: COLORS.accentSoft, flex: 1 } },
-            h('div', { style: { ...styles.cardHeader, marginBottom: 10 } },
-              h('span', { style: { fontSize: 13, fontWeight: 600 } }, '🔗 配对新设备'),
+            h('div', { style: { ...styles.cardHeader, marginBottom: 8 } },
+              h('span', { style: { fontSize: 12, fontWeight: 600 } }, '🔗 配对新设备'),
               h('div', { style: { fontSize: 10, color: COLORS.textSecondary } }, '首次使用，需要配对码')
             ),
             h('div', { style: { display: 'flex', gap: 6, marginBottom: 6 } },
               h('input', {
-                style: { ...styles.input, flex: 1 },
+                style: { ...styles.input, flex: 2 },
                 placeholder: 'IP',
                 value: connectIP,
                 onChange: e => setConnectIP(e.target.value),
               }),
               h('input', {
-                style: { ...styles.input, width: 70 },
-                placeholder: '配对端口',
+                style: { ...styles.input, flex: 1 },
+                placeholder: '端口',
                 value: pairPort,
                 onChange: e => setPairPort(e.target.value),
               }),
@@ -1887,9 +1922,21 @@ window.__ModuleLoader__.load({
               }),
             ),
             h('button', {
-              ...styles.btn,
-              ...styles.btnSuccess,
-              style: { width: '100%' },
+              style: {
+                width: '100%',
+                padding: '6px 16px',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                background: '#3b82f6',
+                color: '#ffffff',
+              },
               onClick: handlePair,
               disabled: busy || !connectIP || !pairingCode,
             }, '🔗 配对')
@@ -1897,94 +1944,146 @@ window.__ModuleLoader__.load({
           
           // 连接卡片
           h('div', { style: { ...styles.card, flex: 1 } },
-            h('div', { style: { ...styles.cardHeader, marginBottom: 10 } },
-              h('span', { style: { fontSize: 13, fontWeight: 600 } }, '🔌 连接设备'),
+            h('div', { style: { ...styles.cardHeader, marginBottom: 8 } },
+              h('span', { style: { fontSize: 12, fontWeight: 600 } }, '🔌 连接设备'),
               h('div', { style: { fontSize: 10, color: COLORS.textSecondary } }, '配对成功后使用')
             ),
             h('div', { style: { display: 'flex', gap: 6, marginBottom: 6 } },
               h('input', {
-                style: { ...styles.input, flex: 1 },
+                style: { ...styles.input, flex: 2 },
                 placeholder: 'IP',
                 value: connectIP,
                 onChange: e => setConnectIP(e.target.value),
               }),
               h('input', {
-                style: { ...styles.input, width: 70 },
-                placeholder: '连接端口',
+                style: { ...styles.input, flex: 1 },
+                placeholder: '端口',
                 value: connectPort,
                 onChange: e => setConnectPort(e.target.value),
               }),
             ),
             h('button', {
-              ...styles.btn,
-              ...styles.btnSuccess,
-              style: { width: '100%' },
+              style: {
+                width: '100%',
+                padding: '6px 16px',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                background: '#3b82f6',
+                color: '#ffffff',
+              },
               onClick: handleConnect,
               disabled: busy || !connectIP,
             }, '🔌 连接')
           )
         ),
         
-        // 历史记录（独立一行）
+        // 历史记录（独立一行，可滑动）
         history.length > 0 && h('div', { style: { ...styles.card, marginBottom: 12 } },
           h('div', { style: { ...styles.cardHeader, marginBottom: 8 } },
             h('span', { style: { fontSize: 12, fontWeight: 600 } }, '📜 快速重连')
           ),
-          h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+          h('div', { 
+            style: { 
+              display: 'flex', 
+              gap: 10, 
+              overflowX: 'auto',
+              paddingBottom: 8,
+              marginBottom: -8,
+            } 
+          },
             history.map(item =>
               h('div', {
                 key: item.key,
                 style: {
+                  flexShrink: 0,
                   display: 'flex',
-                  alignItems: 'center',
+                  flexDirection: 'column',
                   gap: 4,
-                  padding: '4px 8px',
-                  background: COLORS.bg,
-                  borderRadius: 6,
-                  fontSize: 11,
+                  padding: '10px 14px',
+                  background: COLORS.bgSecondary,
+                  borderRadius: 10,
+                  border: `1px solid ${COLORS.border}`,
+                  minWidth: 120,
+                  cursor: 'pointer',
                 },
+                onClick: async () => {
+                  setBusy(true)
+                  try {
+                    await api.connect(item.ip, parseInt(item.port) || 5555)
+                    await loadDevices()
+                    const data = await api.listDevices()
+                    const newDevices = data.devices || []
+                    if (!selected && newDevices.length > 0) {
+                      setSelected(newDevices[0])
+                    }
+                  } catch (e) {
+                    setError('重连失败: ' + e.message)
+                  } finally {
+                    setBusy(false)
+                  }
+                }
               },
                 h('span', {
-                  style: { cursor: 'pointer', color: COLORS.primary },
-                  title: `${item.ip}:${item.port} - 点击重连`,
-                  onClick: async () => {
-                    setBusy(true)
-                    try {
-                      await api.connect(item.ip, parseInt(item.port) || 5555)
-                      await loadDevices()
-                      const data = await api.listDevices()
-                      const newDevices = data.devices || []
-                      if (!selected && newDevices.length > 0) {
-                        setSelected(newDevices[0])
-                      }
-                    } catch (e) {
-                      setError('重连失败: ' + e.message)
-                    } finally {
-                      setBusy(false)
-                    }
-                  }
-                }, item.name || `${item.ip}:${item.port}`),
-                h('span', {
-                  style: { fontSize: 9, color: COLORS.textSecondary, cursor: 'pointer' },
-                  title: '点击编辑备注',
-                  onClick: () => {
-                    const newName = prompt('输入设备备注名称:', item.name || '')
-                    if (newName !== null) {
-                      updateHistoryName(item.key, newName.trim())
-                    }
-                  }
-                }, '✏️'),
-                h('button', {
                   style: { 
-                    padding: 0, 
-                    background: 'none', 
-                    border: 'none', 
-                    color: COLORS.error,
-                    cursor: 'pointer',
-                    fontSize: 10,
-                  },
-                  onClick: (e) => deleteHistory(e, item.key)
-                }, '✕')
+                    fontSize: 13, 
+                    fontWeight: 600,
+                    color: COLORS.accent,
+                  }
+                }, item.name || item.ip),
+                h('span', {
+                  style: { 
+                    fontSize: 11, 
+                    color: COLORS.textSecondary,
+                  }
+                }, `${item.port}`),
+                h('div', {
+                  style: {
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: 6,
+                    paddingTop: 6,
+                    borderTop: `1px solid ${COLORS.border}`,
+                  }
+                },
+                  h('span', {
+                    style: { 
+                      fontSize: 11, 
+                      color: COLORS.accent, 
+                      cursor: 'pointer',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: COLORS.accentSoft,
+                    },
+                    onClick: (e) => {
+                      e.stopPropagation()
+                      const newName = prompt('输入设备备注名称:', item.name || '')
+                      if (newName !== null) {
+                        updateHistoryName(item.key, newName.trim())
+                      }
+                    }
+                  }, '编辑'),
+                  h('span', {
+                    style: { 
+                      fontSize: 11, 
+                      color: COLORS.error, 
+                      cursor: 'pointer',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: COLORS.errorBg,
+                    },
+                    onClick: (e) => {
+                      e.stopPropagation()
+                      deleteHistory(e, item.key)
+                    }
+                  }, '删除')
+                )
               )
             )
           )
