@@ -290,6 +290,11 @@ async function handleRpcEndpoint(ctx: any, cfg: any, endpoint: string, raw: any,
         const target = `${host}:${port}`;
         const result = await runAdb(['connect', target], cfg);
         if (result.exitCode !== 0) throw new Error(result.stderr || '连接失败');
+        // adb connect 可能返回 exitCode 0 但连接失败，需要检查输出
+        const output = (result.stdout + result.stderr).toLowerCase();
+        if (output.includes('failed') || output.includes('cannot') || output.includes('error') || output.includes('拒绝')) {
+          throw new Error(result.stdout || result.stderr || '连接失败');
+        }
         return { ok: true, value: { target, connected: true, output: result.stdout } };
       }
 

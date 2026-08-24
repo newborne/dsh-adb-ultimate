@@ -894,9 +894,16 @@ window.__ModuleLoader__.load({
         const port = connectPort || '5555'
         
         api.connect(ip, parseInt(port) || 5555)
-          .then(() => {
+          .then(async () => {
             setSuccessMsg(`连接 ${ip}:${port} 成功！`)
             setError('')
+            // 尝试获取设备信息作为备注
+            try {
+              const info = await api.getDeviceInfo(`${ip}:${port}`)
+              addToHistory(ip, port, info.model || info.device || '')
+            } catch {
+              addToHistory(ip, port, '')
+            }
             loadDevices()
             setBusy(false)
           })
@@ -1007,10 +1014,15 @@ window.__ModuleLoader__.load({
         localStorage.setItem('dsh-adb-ultimate-history', JSON.stringify(newHistory.slice(0, 10)))
       }
       
-      const addToHistory = (ip, port, model = '') => {
+      const addToHistory = (ip, port, name = '') => {
         const key = `${ip}:${port}`
         const newHistory = history.filter(h => h.key !== key)
-        newHistory.unshift({ key, ip, port, model, time: Date.now() })
+        newHistory.unshift({ key, ip, port, name, time: Date.now() })
+        saveHistory(newHistory)
+      }
+      
+      const updateHistoryName = (key, newName) => {
+        const newHistory = history.map(h => h.key === key ? { ...h, name: newName } : h)
         saveHistory(newHistory)
       }
       
@@ -1923,32 +1935,45 @@ window.__ModuleLoader__.load({
               h('div', {
                 key: item.key,
                 style: {
-                  ...styles.row,
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: 4,
                   padding: '4px 8px',
                   background: COLORS.bg,
                   borderRadius: 6,
-                  cursor: 'pointer',
                   fontSize: 11,
                 },
-                onClick: async () => {
-                  setBusy(true)
-                  try {
-                    await api.connect(item.ip, parseInt(item.port) || 5555)
-                    await loadDevices()
-                    const data = await api.listDevices()
-                    const newDevices = data.devices || []
-                    if (!selected && newDevices.length > 0) {
-                      setSelected(newDevices[0])
-                    }
-                  } catch (e) {
-                    setError('重连失败: ' + e.message)
-                  } finally {
-                    setBusy(false)
-                  }
-                }
               },
-                h('span', null, `${item.ip}:${item.port}`),
+                h('span', {
+                  style: { cursor: 'pointer', color: COLORS.primary },
+                  title: `${item.ip}:${item.port} - 点击重连`,
+                  onClick: async () => {
+                    setBusy(true)
+                    try {
+                      await api.connect(item.ip, parseInt(item.port) || 5555)
+                      await loadDevices()
+                      const data = await api.listDevices()
+                      const newDevices = data.devices || []
+                      if (!selected && newDevices.length > 0) {
+                        setSelected(newDevices[0])
+                      }
+                    } catch (e) {
+                      setError('重连失败: ' + e.message)
+                    } finally {
+                      setBusy(false)
+                    }
+                  }
+                }, item.name || `${item.ip}:${item.port}`),
+                h('span', {
+                  style: { fontSize: 9, color: COLORS.textSecondary, cursor: 'pointer' },
+                  title: '点击编辑备注',
+                  onClick: () => {
+                    const newName = prompt('输入设备备注名称:', item.name || '')
+                    if (newName !== null) {
+                      updateHistoryName(item.key, newName.trim())
+                    }
+                  }
+                }, '✏️'),
                 h('button', {
                   style: { 
                     padding: 0, 
